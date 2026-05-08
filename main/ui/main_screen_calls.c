@@ -12,6 +12,7 @@
 #include "stcc4.h"
 #include "battery.h"
 #include "lvgl_user.h"
+#include "nvs_storage.h"
 #include "screens.h"
 
 #define MAIN_SCREEN_UPDATE_MS 60000
@@ -45,6 +46,18 @@ static void main_screen_timer_cb(void *arg)
     main_screen_notify_update_task();
 }
 
+static void main_screen_handle_day_rollover(const pcf85263a_datetime_t *datetime)
+{
+    if (datetime->hour == 0 && datetime->minute == 0)
+    {
+        esp_err_t err = nvs_storage_sync_current_day();
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "sync current day failed: %s", esp_err_to_name(err));
+        }
+    }
+}
+
 void update_main_screen_date_labels(bool acquire_lock)
 {
     char time_text[12] = "--:--";
@@ -57,6 +70,7 @@ void update_main_screen_date_labels(bool acquire_lock)
     {
         (void)snprintf(time_text, sizeof(time_text), "%02u:%02u", datetime.hour, datetime.minute);
         (void)snprintf(date_text, sizeof(date_text), "%u年%u月%u日", datetime.year, datetime.month, datetime.day);
+        main_screen_handle_day_rollover(&datetime);
 
         if (datetime.weekday < (sizeof(s_weekday_text) / sizeof(s_weekday_text[0])))
         {

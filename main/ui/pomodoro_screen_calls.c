@@ -11,6 +11,7 @@
 #include "lvgl_user.h"
 #include "screens.h"
 #include "message_screen_calls.h"
+#include "nvs_storage.h"
 #include "pomodoro_screen_calls.h"
 #include "imu.h"
 
@@ -47,6 +48,107 @@ static const uint8_t REST_TIME_MINUTES = 5;
 static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 
 static bool s_audio_task_running = false;
+
+static void pomodoro_notify_ui_task(void);
+
+static uint16_t pomodoro_get_total_seconds_for_state(pomodoro_state_t state)
+{
+    return (uint16_t)(state == POMODORO_STATE_FOCUS ? FOCUS_TIME_MINUTES : REST_TIME_MINUTES) * 60U;
+}
+
+static uint16_t pomodoro_get_elapsed_minutes_for_state(pomodoro_state_t state, uint16_t remaining_seconds)
+{
+    uint16_t total_seconds = pomodoro_get_total_seconds_for_state(state);
+    uint16_t elapsed_seconds = total_seconds > remaining_seconds ? (uint16_t)(total_seconds - remaining_seconds) : 0;
+
+    if (elapsed_seconds == 0)
+    {
+        return 0;
+    }
+
+    return (uint16_t)((elapsed_seconds + 30U) / 60U);
+}
+
+static bool pomodoro_sync_counts_from_storage(void)
+{
+    nvs_storage_daily_totals_t totals = {0};
+    bool counts_changed = false;
+    esp_err_t err = nvs_storage_get_daily_totals(&totals);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "load daily totals failed: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    portENTER_CRITICAL(&s_pomodoro_lock);
+    counts_changed = (s_focus_count != totals.focus_count) || (s_nap_count != totals.nap_count);
+    s_focus_count = totals.focus_count;
+    s_nap_count = totals.nap_count;
+    portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    return counts_changed;
+}
+
+static void pomodoro_sync_current_day_and_counts(void)
+{
+    esp_err_t err = nvs_storage_sync_current_day();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "sync current day failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    if (pomodoro_sync_counts_from_storage())
+    {
+        pomodoro_notify_ui_task();
+    }
+}
+
+static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_state,
+                                                  uint16_t remaining_seconds,
+                                                  bool increase_counter)
+{
+    esp_err_t err;
+    uint16_t elapsed_minutes = pomodoro_get_elapsed_minutes_for_state(completed_state, remaining_seconds);
+
+    if (completed_state == POMODORO_STATE_FOCUS)
+    {
+        if (increase_counter)
+        {
+            s_focus_count++;
+            err = nvs_storage_increment_focus_count();
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "increment focus count failed: %s", esp_err_to_name(err));
+            }
+        }
+
+        err = nvs_storage_accumulate_focus_minutes(elapsed_minutes);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "accumulate focus minutes failed: %s", esp_err_to_name(err));
+        }
+    }
+    else
+    {
+        if (increase_counter)
+        {
+            s_nap_count++;
+            err = nvs_storage_increment_nap_count();
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "increment nap count failed: %s", esp_err_to_name(err));
+            }
+        }
+
+        err = nvs_storage_accumulate_rest_minutes(elapsed_minutes);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "accumulate rest minutes failed: %s", esp_err_to_name(err));
+        }
+    }
+}
 
 static void pomodoro_timeout_audio_task(void *arg)
 {
@@ -172,21 +274,18 @@ static void pomodoro_notify_ui_task(void)
 
 static void pomodoro_go_to_next_stage(bool increase_counter)
 {
+    pomodoro_state_t completed_state = s_pomodoro_state;
+    uint16_t remaining_seconds = s_remaining_seconds;
+
     if (s_pomodoro_state == POMODORO_STATE_FOCUS)
     {
-        if (increase_counter)
-        {
-            s_focus_count++;
-        }
+        pomodoro_record_stage_progress_locked(completed_state, remaining_seconds, increase_counter);
         s_pomodoro_state = POMODORO_STATE_REST;
         s_remaining_seconds = REST_TIME_MINUTES * 60;
     }
     else
     {
-        if (increase_counter)
-        {
-            s_nap_count++;
-        }
+        pomodoro_record_stage_progress_locked(completed_state, remaining_seconds, increase_counter);
         s_pomodoro_state = POMODORO_STATE_FOCUS;
         s_remaining_seconds = FOCUS_TIME_MINUTES * 60;
     }
@@ -309,6 +408,8 @@ static void pomodoro_flip_check_timer_cb(void *arg)
     static lv_disp_rotation_t s_last_imu_rotation = LV_DISP_ROTATION_0;
     static bool s_flip_rotation_initialized = false;
 
+    pomodoro_sync_current_day_and_counts();
+
     lv_disp_rotation_t imu_rotation = lvgl_user_get_rotation();
     if (!s_flip_rotation_initialized)
     {
@@ -383,6 +484,7 @@ void pomodoro_screen_start_update_task(void)
         return;
     }
 
+    pomodoro_sync_current_day_and_counts();
     s_update_task_exit_requested = false;
 
     BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
