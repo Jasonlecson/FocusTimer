@@ -22,8 +22,20 @@
 #include "aw32001.h"
 #include "battery.h"
 #include "message_screen_calls.h"
+#include "nvs_flash.h"
 
 #define TAG "main"
+
+static esp_err_t storage_init_nvs_flash(void)
+{
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    return err;
+}
 
 static void shipping_mode_cb(void *user_data)
 {
@@ -34,6 +46,7 @@ static void shipping_mode_cb(void *user_data)
 
 void app_main(void)
 {
+    ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
