@@ -468,6 +468,56 @@ static esp_err_t nvs_storage_export_json_internal(char *buffer,
     return ESP_OK;
 }
 
+static esp_err_t nvs_storage_write_record_for_date(const char *date_string,
+                                                   const nvs_storage_daily_totals_t *totals)
+{
+    char *json = NULL;
+    char *rendered_json = NULL;
+    cJSON *root = NULL;
+    esp_err_t err;
+
+    if (date_string == NULL || date_string[0] == '\0' || totals == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (nvs_storage_totals_is_empty(totals))
+    {
+        return ESP_OK;
+    }
+
+    err = nvs_storage_load_records_json_alloc(&json);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    root = nvs_storage_parse_or_create_root(json);
+    free(json);
+    if (root == NULL)
+    {
+        return ESP_ERR_NO_MEM;
+    }
+
+    err = nvs_storage_merge_record(root, date_string, totals);
+    if (err != ESP_OK)
+    {
+        cJSON_Delete(root);
+        return err;
+    }
+
+    rendered_json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (rendered_json == NULL)
+    {
+        return ESP_ERR_NO_MEM;
+    }
+
+    err = nvs_storage_store_records_json(rendered_json);
+    cJSON_free(rendered_json);
+    return err;
+}
+
 esp_err_t nvs_storage_init(void)
 {
     char current_date[NVS_STORAGE_DATE_STR_LEN] = {0};
@@ -502,70 +552,89 @@ esp_err_t nvs_storage_init(void)
 
 esp_err_t nvs_storage_save_daily_record(void)
 {
-    char current_date[NVS_STORAGE_DATE_STR_LEN] = {0};
+    char tracked_date[NVS_STORAGE_DATE_STR_LEN] = {0};
     nvs_storage_daily_totals_t totals_snapshot = {0};
-    char *json = NULL;
-    char *rendered_json = NULL;
-    cJSON *root = NULL;
 
     if (!s_nvs_storage_state.initialized)
     {
         return ESP_ERR_INVALID_STATE;
     }
 
-    esp_err_t err = nvs_storage_get_current_date_string(current_date, sizeof(current_date));
+    portENTER_CRITICAL(&s_nvs_storage_lock);
+    totals_snapshot = s_nvs_storage_state.totals;
+    memcpy(tracked_date, s_nvs_storage_state.current_date, sizeof(tracked_date));
+    portEXIT_CRITICAL(&s_nvs_storage_lock);
+
+    if (tracked_date[0] == '\0')
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    return nvs_storage_write_record_for_date(tracked_date, &totals_snapshot);
+}
+
+esp_err_t nvs_storage_sync_current_day(void)
+{
+    char rtc_date[NVS_STORAGE_DATE_STR_LEN] = {0};
+    char tracked_date[NVS_STORAGE_DATE_STR_LEN] = {0};
+    nvs_storage_daily_totals_t tracked_totals = {0};
+    nvs_storage_daily_totals_t next_day_totals = {0};
+    esp_err_t err;
+
+    if (!s_nvs_storage_state.initialized)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    err = nvs_storage_get_current_date_string(rtc_date, sizeof(rtc_date));
     if (err != ESP_OK)
     {
         return err;
     }
 
     portENTER_CRITICAL(&s_nvs_storage_lock);
-    totals_snapshot = s_nvs_storage_state.totals;
+    memcpy(tracked_date, s_nvs_storage_state.current_date, sizeof(tracked_date));
+    tracked_totals = s_nvs_storage_state.totals;
     portEXIT_CRITICAL(&s_nvs_storage_lock);
 
-    if (nvs_storage_totals_is_empty(&totals_snapshot))
+    if (tracked_date[0] == '\0')
+    {
+        err = nvs_storage_load_today_totals(rtc_date, &next_day_totals);
+        if (err != ESP_OK)
+        {
+            return err;
+        }
+
+        portENTER_CRITICAL(&s_nvs_storage_lock);
+        memcpy(s_nvs_storage_state.current_date, rtc_date, sizeof(s_nvs_storage_state.current_date));
+        s_nvs_storage_state.totals = next_day_totals;
+        portEXIT_CRITICAL(&s_nvs_storage_lock);
+        return ESP_OK;
+    }
+
+    if (strcmp(tracked_date, rtc_date) == 0)
     {
         return ESP_OK;
     }
 
-    err = nvs_storage_load_records_json_alloc(&json);
+    err = nvs_storage_write_record_for_date(tracked_date, &tracked_totals);
     if (err != ESP_OK)
     {
         return err;
     }
 
-    root = nvs_storage_parse_or_create_root(json);
-    free(json);
-    if (root == NULL)
-    {
-        return ESP_ERR_NO_MEM;
-    }
-
-    err = nvs_storage_merge_record(root, current_date, &totals_snapshot);
-    if (err != ESP_OK)
-    {
-        cJSON_Delete(root);
-        return err;
-    }
-
-    rendered_json = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-    if (rendered_json == NULL)
-    {
-        return ESP_ERR_NO_MEM;
-    }
-
-    err = nvs_storage_store_records_json(rendered_json);
-    cJSON_free(rendered_json);
+    err = nvs_storage_load_today_totals(rtc_date, &next_day_totals);
     if (err != ESP_OK)
     {
         return err;
     }
 
     portENTER_CRITICAL(&s_nvs_storage_lock);
-    memcpy(s_nvs_storage_state.current_date, current_date, sizeof(s_nvs_storage_state.current_date));
+    memcpy(s_nvs_storage_state.current_date, rtc_date, sizeof(s_nvs_storage_state.current_date));
+    s_nvs_storage_state.totals = next_day_totals;
     portEXIT_CRITICAL(&s_nvs_storage_lock);
 
+    ESP_LOGI(TAG, "rolled daily totals from %s to %s", tracked_date, rtc_date);
     return ESP_OK;
 }
 

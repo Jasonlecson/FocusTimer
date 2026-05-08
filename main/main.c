@@ -40,6 +40,12 @@ static esp_err_t storage_init_nvs_flash(void)
 
 static void shipping_mode_cb(void *user_data)
 {
+    esp_err_t err = nvs_storage_save_daily_record();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "save daily record before shipping mode failed: %s", esp_err_to_name(err));
+    }
+
     _lock_acquire(&lvgl_api_lock);
     message_screen_show_with_text("", "关机中...\n如果正在充电,拔下电源后才会关机", "OK");
     _lock_release(&lvgl_api_lock);

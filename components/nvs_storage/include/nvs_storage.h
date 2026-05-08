@@ -19,6 +19,7 @@ typedef struct
 
 esp_err_t nvs_storage_init(void);
 esp_err_t nvs_storage_save_daily_record(void);
+esp_err_t nvs_storage_sync_current_day(void);
 esp_err_t nvs_storage_get_records_json(char *buffer, size_t buffer_size, size_t *out_length);
 
 esp_err_t nvs_storage_accumulate_focus_minutes(uint16_t minutes);
