@@ -15,7 +15,7 @@ enum ScreensEnum {
     SCREEN_ID_MAIN = 2,
     SCREEN_ID_SUB_MAIN = 3,
     SCREEN_ID_MP3 = 4,
-    SCREEN_ID_SETTING = 5,
+    SCREEN_ID_TIME_SETTING = 5,
     SCREEN_ID_POMODORO = 6,
     SCREEN_ID_MESSAGE = 7,
     _SCREEN_ID_LAST = 7
@@ -26,7 +26,7 @@ typedef struct _objects_t {
     lv_obj_t *main;
     lv_obj_t *sub_main;
     lv_obj_t *mp3;
-    lv_obj_t *setting;
+    lv_obj_t *time_setting;
     lv_obj_t *pomodoro;
     lv_obj_t *message;
     lv_obj_t *main_scr_goto_submain_btn;
@@ -40,7 +40,7 @@ typedef struct _objects_t {
     lv_obj_t *main_scr_battery_capacity_label;
     lv_obj_t *submain_back_to_main_btn;
     lv_obj_t *submain_scr_enter_pomodoro_btn;
-    lv_obj_t *submain_scr_enter_setting_btn;
+    lv_obj_t *submain_scr_enter_time_setting_btn;
     lv_obj_t *submain_scr_enter_mp3_btn;
     lv_obj_t *mp3_scr_back_to_main_btn;
     lv_obj_t *mp3_scr_musictitle_label;
@@ -51,13 +51,13 @@ typedef struct _objects_t {
     lv_obj_t *mp3_scr_volume_slider;
     lv_obj_t *mp3_scr_current_total_time_label;
     lv_obj_t *mp3_scr_file_count_label;
-    lv_obj_t *setting_scr_back_to_main_btn;
-    lv_obj_t *setting_scr_year_btn;
-    lv_obj_t *setting_scr_month_btn;
-    lv_obj_t *setting_scr_day_btn;
-    lv_obj_t *setting_scr_weekday_btn;
-    lv_obj_t *setting_scr_hour_btn;
-    lv_obj_t *setting_scr_minute_btn;
+    lv_obj_t *time_setting_scr_back_to_main_btn;
+    lv_obj_t *time_setting_scr_year_btn;
+    lv_obj_t *time_setting_scr_month_btn;
+    lv_obj_t *time_setting_scr_day_btn;
+    lv_obj_t *time_setting_scr_weekday_btn;
+    lv_obj_t *time_setting_scr_hour_btn;
+    lv_obj_t *time_setting_scr_minute_btn;
     lv_obj_t *pomodoro_back_to_main_btn;
     lv_obj_t *pomodoro_scr_start_pause_btn;
     lv_obj_t *pomodoro_scr_reset_btn;
@@ -87,8 +87,8 @@ void tick_screen_sub_main();
 void create_screen_mp3();
 void tick_screen_mp3();
 
-void create_screen_setting();
-void tick_screen_setting();
+void create_screen_time_setting();
+void tick_screen_time_setting();
 
 void create_screen_pomodoro();
 void tick_screen_pomodoro();

@@ -104,7 +104,7 @@ void action_submain_scr_enter_setting_btn(lv_event_t *e)
         {
             return;
         }
-        lv_screen_load_anim(objects.setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+        lv_screen_load_anim(objects.time_setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
@@ -240,12 +240,12 @@ void action_mp3_scr_volume_slider(lv_event_t *e)
     }
 }
 
-void action_setting_scr_date_btn(lv_event_t *e)
+void action_time_setting_scr_date_btn(lv_event_t *e)
 {
-    handle_setting_date_btn_event(e);
+    handle_time_setting_date_btn_event(e);
 }
 
-void action_setting_scr(lv_event_t *e)
+void action_time_setting_scr(lv_event_t *e)
 {
-    handle_setting_screen_load_unload_event(e);
+    handle_time_setting_screen_load_unload_event(e);
 }

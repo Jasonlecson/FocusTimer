@@ -33,17 +33,17 @@ static lv_obj_t *setting_get_field_btn(uint8_t field)
     switch (field)
     {
     case SETTING_FIELD_YEAR:
-        return objects.setting_scr_year_btn;
+        return objects.time_setting_scr_year_btn;
     case SETTING_FIELD_MONTH:
-        return objects.setting_scr_month_btn;
+        return objects.time_setting_scr_month_btn;
     case SETTING_FIELD_DAY:
-        return objects.setting_scr_day_btn;
+        return objects.time_setting_scr_day_btn;
     case SETTING_FIELD_WEEKDAY:
-        return objects.setting_scr_weekday_btn;
+        return objects.time_setting_scr_weekday_btn;
     case SETTING_FIELD_HOUR:
-        return objects.setting_scr_hour_btn;
+        return objects.time_setting_scr_hour_btn;
     case SETTING_FIELD_MINUTE:
-        return objects.setting_scr_minute_btn;
+        return objects.time_setting_scr_minute_btn;
     default:
         return NULL;
     }
@@ -228,7 +228,7 @@ static void setting_adjust_day_for_month_year(void)
     }
 }
 
-void handle_setting_date_btn_event(lv_event_t *e)
+void handle_time_setting_date_btn_event(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t *target = (lv_obj_t *)lv_event_get_target(e);
@@ -335,7 +335,7 @@ void handle_setting_date_btn_event(lv_event_t *e)
     }
 }
 
-void handle_setting_screen_load_unload_event(lv_event_t *e)
+void handle_time_setting_screen_load_unload_event(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SCREEN_LOAD_START)
