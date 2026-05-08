@@ -252,6 +252,25 @@ void create_screen_sub_main() {
                 }
             }
         }
+        {
+            // submain_scr_enter_power_setting_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.submain_scr_enter_power_setting_btn = obj;
+            lv_obj_set_pos(obj, 59, 77);
+            lv_obj_set_size(obj, 77, 40);
+            lv_obj_add_event_cb(obj, action_submain_scr_enter_power_setting_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 1, -4);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_label_set_text(obj, "电源");
+                }
+            }
+        }
     }
     
     tick_screen_sub_main();
@@ -922,6 +941,98 @@ void create_screen_message() {
 void tick_screen_message() {
 }
 
+void create_screen_power_setting() {
+    lv_obj_t *obj = lv_obj_create(0);
+    objects.power_setting = obj;
+    lv_obj_set_pos(obj, 0, 0);
+    lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_power_setting_scr, LV_EVENT_SCREEN_LOAD_START, (void *)0);
+    lv_obj_add_event_cb(obj, action_power_setting_scr, LV_EVENT_SCREEN_UNLOAD_START, (void *)0);
+    add_style_screen_style_dark(obj);
+    {
+        lv_obj_t *parent_obj = obj;
+        {
+            // power_setting_scr_back_to_main_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.power_setting_scr_back_to_main_btn = obj;
+            lv_obj_set_pos(obj, 6, 5);
+            lv_obj_set_size(obj, 38, 29);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -1, 1);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_20, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "<-");
+                }
+            }
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 25, 84);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "充电阈值");
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 152, 10);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "电源设置");
+        }
+        {
+            // power_setting_scr_lpm_checkbox
+            lv_obj_t *obj = lv_checkbox_create(parent_obj);
+            objects.power_setting_scr_lpm_checkbox = obj;
+            lv_obj_set_pos(obj, 27, 44);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_checkbox_set_text(obj, "低功耗模式");
+            add_style_checkbox_style(obj);
+        }
+        {
+            // power_setting_scr_auto_sleep_checkbox
+            lv_obj_t *obj = lv_checkbox_create(parent_obj);
+            objects.power_setting_scr_auto_sleep_checkbox = obj;
+            lv_obj_set_pos(obj, 219, 44);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_checkbox_set_text(obj, "自动休眠");
+            add_style_checkbox_style(obj);
+        }
+        {
+            // power_setting_scr_charge_limit_slider
+            lv_obj_t *obj = lv_slider_create(parent_obj);
+            objects.power_setting_scr_charge_limit_slider = obj;
+            lv_obj_set_pos(obj, 192, 89);
+            lv_obj_set_size(obj, 145, 14);
+            lv_slider_set_range(obj, 75, 95);
+            lv_slider_set_value(obj, 80, LV_ANIM_OFF);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_charge_limit_slider, LV_EVENT_VALUE_CHANGED, (void *)0);
+            add_style_progress_bar_style(obj);
+        }
+        {
+            // power_setting_scr_charge_limit_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.power_setting_scr_charge_limit_label = obj;
+            lv_obj_set_pos(obj, 110, 84);
+            lv_obj_set_size(obj, 69, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "80%");
+        }
+    }
+    
+    tick_screen_power_setting();
+}
+
+void tick_screen_power_setting() {
+}
+
 typedef void (*tick_screen_func_t)();
 tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_start,
@@ -931,6 +1042,7 @@ tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_time_setting,
     tick_screen_pomodoro,
     tick_screen_message,
+    tick_screen_power_setting,
 };
 void tick_screen(int screen_index) {
     tick_screen_funcs[screen_index]();
@@ -1043,4 +1155,5 @@ void create_screens() {
     create_screen_time_setting();
     create_screen_pomodoro();
     create_screen_message();
+    create_screen_power_setting();
 }

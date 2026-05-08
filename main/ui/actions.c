@@ -95,7 +95,7 @@ void action_submain_scr_enter_mp3_btn(lv_event_t *e)
     }
 }
 
-void action_submain_scr_enter_setting_btn(lv_event_t *e)
+void action_submain_scr_enter_time_setting_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
@@ -248,4 +248,25 @@ void action_time_setting_scr_date_btn(lv_event_t *e)
 void action_time_setting_scr(lv_event_t *e)
 {
     handle_time_setting_screen_load_unload_event(e);
+}
+
+void action_submain_scr_enter_power_setting_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.power_setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+    }
+}
+
+void action_power_setting_scr_charge_limit_slider(lv_event_t *e)
+{
+}
+
+void action_power_setting_scr(lv_event_t *e)
+{
 }
