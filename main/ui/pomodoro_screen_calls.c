@@ -49,6 +49,8 @@ static portMUX_TYPE s_pomodoro_lock = portMUX_INITIALIZER_UNLOCKED;
 
 static bool s_audio_task_running = false;
 
+static void pomodoro_notify_ui_task(void);
+
 static uint16_t pomodoro_get_total_seconds_for_state(pomodoro_state_t state)
 {
     return (uint16_t)(state == POMODORO_STATE_FOCUS ? FOCUS_TIME_MINUTES : REST_TIME_MINUTES) * 60U;
@@ -67,21 +69,40 @@ static uint16_t pomodoro_get_elapsed_minutes_for_state(pomodoro_state_t state, u
     return (uint16_t)((elapsed_seconds + 30U) / 60U);
 }
 
-static void pomodoro_sync_counts_from_storage(void)
+static bool pomodoro_sync_counts_from_storage(void)
 {
     nvs_storage_daily_totals_t totals = {0};
+    bool counts_changed = false;
     esp_err_t err = nvs_storage_get_daily_totals(&totals);
 
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "load daily totals failed: %s", esp_err_to_name(err));
-        return;
+        return false;
     }
 
     portENTER_CRITICAL(&s_pomodoro_lock);
+    counts_changed = (s_focus_count != totals.focus_count) || (s_nap_count != totals.nap_count);
     s_focus_count = totals.focus_count;
     s_nap_count = totals.nap_count;
     portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    return counts_changed;
+}
+
+static void pomodoro_sync_current_day_and_counts(void)
+{
+    esp_err_t err = nvs_storage_sync_current_day();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "sync current day failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    if (pomodoro_sync_counts_from_storage())
+    {
+        pomodoro_notify_ui_task();
+    }
 }
 
 static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_state,
@@ -387,6 +408,8 @@ static void pomodoro_flip_check_timer_cb(void *arg)
     static lv_disp_rotation_t s_last_imu_rotation = LV_DISP_ROTATION_0;
     static bool s_flip_rotation_initialized = false;
 
+    pomodoro_sync_current_day_and_counts();
+
     lv_disp_rotation_t imu_rotation = lvgl_user_get_rotation();
     if (!s_flip_rotation_initialized)
     {
@@ -461,7 +484,7 @@ void pomodoro_screen_start_update_task(void)
         return;
     }
 
-    pomodoro_sync_counts_from_storage();
+    pomodoro_sync_current_day_and_counts();
     s_update_task_exit_requested = false;
 
     BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
