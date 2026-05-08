@@ -22,6 +22,7 @@
 #include "aw32001.h"
 #include "battery.h"
 #include "message_screen_calls.h"
+#include "nvs_storage.h"
 #include "nvs_flash.h"
 
 #define TAG "main"
@@ -49,6 +50,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(imu_init(I2C_NUM_0));
