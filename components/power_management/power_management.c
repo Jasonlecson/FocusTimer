@@ -1,0 +1,249 @@
+#include "power_management.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "esp_log.h"
+#include "esp_pm.h"
+#include "esp_sleep.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#define TAG "power_mgmt"
+
+/* ---- NVS 键名 ---- */
+#define NVS_NAMESPACE      "power_mgr"
+#define NVS_KEY_AUTO_LPM   "pm_auto_lpm"
+#define NVS_KEY_AUTO_SLEEP "pm_auto_sleep"
+#define NVS_KEY_CHG_THR    "pm_chg_thr"
+
+/* ---- 默认值 ---- */
+#define DEFAULT_AUTO_LPM       false
+#define DEFAULT_AUTO_SLEEP     false
+#define DEFAULT_CHG_THRESHOLD  90
+
+/* ---- 空闲超时 ---- */
+#define IDLE_TIMEOUT_SEC       (5 * 60)  /* 5 分钟 */
+#define DEEPSLEEP_WAKEUP_SEC   (60)      /* 1 分钟唤醒一次 */
+
+/* ---- 频率配置 ---- */
+#define PM_MAX_FREQ_MHZ  96
+#define PM_MIN_FREQ_MHZ  48
+
+/* ---- 运行时状态 ---- */
+static bool s_auto_lightsleep = DEFAULT_AUTO_LPM;
+static bool s_auto_sleep      = DEFAULT_AUTO_SLEEP;
+static uint8_t s_charge_threshold = DEFAULT_CHG_THRESHOLD;
+
+static esp_timer_handle_t s_idle_timer = NULL;
+static int32_t s_idle_seconds = 0;
+
+/* ==================== NVS 辅助 ==================== */
+
+static esp_err_t nvs_read_bool(const char *key, bool default_val, bool *out)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &h);
+    if (err != ESP_OK) {
+        *out = default_val;
+        return ESP_OK;  /* 首次运行无记录，使用默认值 */
+    }
+    uint8_t val = default_val ? 1 : 0;
+    err = nvs_get_u8(h, key, &val);
+    nvs_close(h);
+    *out = (val != 0);
+    return (err == ESP_OK) ? ESP_OK : ESP_OK;  /* 键不存在也返回 OK + 默认值 */
+}
+
+static esp_err_t nvs_write_bool(const char *key, bool val)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(h, key, val ? 1 : 0);
+    nvs_commit(h);
+    nvs_close(h);
+    return err;
+}
+
+static esp_err_t nvs_read_u8(const char *key, uint8_t default_val, uint8_t *out)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &h);
+    if (err != ESP_OK) {
+        *out = default_val;
+        return ESP_OK;
+    }
+    err = nvs_get_u8(h, key, out);
+    nvs_close(h);
+    if (err != ESP_OK) *out = default_val;
+    return ESP_OK;
+}
+
+static esp_err_t nvs_write_u8(const char *key, uint8_t val)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(h, key, val);
+    nvs_commit(h);
+    nvs_close(h);
+    return err;
+}
+
+/* ==================== 低功耗模式 ==================== */
+
+static esp_err_t apply_auto_lightsleep(bool enable)
+{
+    if (enable) {
+        esp_pm_config_t pm_config = {
+            .max_freq_mhz = PM_MAX_FREQ_MHZ,
+            .min_freq_mhz = PM_MIN_FREQ_MHZ,
+            .light_sleep_enable = true,
+        };
+        esp_err_t err = esp_pm_configure(&pm_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_pm_configure enable failed: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "auto light sleep enabled (%d/%d MHz)", PM_MAX_FREQ_MHZ, PM_MIN_FREQ_MHZ);
+        }
+        return err;
+    } else {
+        /* 关闭时恢复默认：不启用 light sleep */
+        esp_pm_config_t pm_config = {
+            .max_freq_mhz = PM_MAX_FREQ_MHZ,
+            .min_freq_mhz = PM_MAX_FREQ_MHZ,
+            .light_sleep_enable = false,
+        };
+        esp_err_t err = esp_pm_configure(&pm_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_pm_configure disable failed: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "auto light sleep disabled");
+        }
+        return err;
+    }
+}
+
+esp_err_t power_management_set_auto_lightsleep(bool enable)
+{
+    s_auto_lightsleep = enable;
+    nvs_write_bool(NVS_KEY_AUTO_LPM, enable);
+    return apply_auto_lightsleep(enable);
+}
+
+bool power_management_get_auto_lightsleep(void)
+{
+    return s_auto_lightsleep;
+}
+
+/* ==================== 自动休眠 ==================== */
+
+esp_err_t power_management_set_auto_sleep(bool enable)
+{
+    s_auto_sleep = enable;
+    nvs_write_bool(NVS_KEY_AUTO_SLEEP, enable);
+    if (!enable) {
+        s_idle_seconds = 0;
+    }
+    ESP_LOGI(TAG, "auto sleep %s", enable ? "enabled" : "disabled");
+    return ESP_OK;
+}
+
+bool power_management_get_auto_sleep(void)
+{
+    return s_auto_sleep;
+}
+
+/* ==================== 充电阈值 ==================== */
+
+esp_err_t power_management_set_charge_threshold(uint8_t threshold)
+{
+    if (threshold > 100) threshold = 100;
+    s_charge_threshold = threshold;
+    nvs_write_u8(NVS_KEY_CHG_THR, threshold);
+    ESP_LOGI(TAG, "charge threshold set to %d%%", threshold);
+    return ESP_OK;
+}
+
+uint8_t power_management_get_charge_threshold(void)
+{
+    return s_charge_threshold;
+}
+
+/* ==================== 空闲检测定时器 ==================== */
+
+static void idle_timer_cb(void *arg)
+{
+    (void)arg;
+
+    if (!s_auto_sleep) return;
+
+    s_idle_seconds++;
+    if (s_idle_seconds >= IDLE_TIMEOUT_SEC) {
+        ESP_LOGI(TAG, "idle timeout %ds, entering deep sleep", IDLE_TIMEOUT_SEC);
+        power_management_enter_deepsleep();
+    }
+}
+
+void power_management_reset_idle_timer(void)
+{
+    s_idle_seconds = 0;
+}
+
+/* ==================== Deep Sleep / Wakeup ==================== */
+
+bool power_management_is_wakeup_from_sleep(void)
+{
+    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
+}
+
+void power_management_enter_deepsleep(void)
+{
+    esp_sleep_enable_timer_wakeup(DEEPSLEEP_WAKEUP_SEC * 1000000ULL);
+    esp_deep_sleep_start();
+    /* 不会执行到这里 */
+}
+
+/* ==================== 初始化 ==================== */
+
+esp_err_t power_management_init(void)
+{
+    /* 从 NVS 读取配置 */
+    nvs_read_bool(NVS_KEY_AUTO_LPM, DEFAULT_AUTO_LPM, &s_auto_lightsleep);
+    nvs_read_bool(NVS_KEY_AUTO_SLEEP, DEFAULT_AUTO_SLEEP, &s_auto_sleep);
+    nvs_read_u8(NVS_KEY_CHG_THR, DEFAULT_CHG_THRESHOLD, &s_charge_threshold);
+
+    ESP_LOGI(TAG, "config from NVS: auto_lpm=%d, auto_sleep=%d, chg_thr=%d%%",
+             s_auto_lightsleep, s_auto_sleep, s_charge_threshold);
+
+    /* 如果低功耗模式已开启，立即生效 */
+    if (s_auto_lightsleep) {
+        apply_auto_lightsleep(true);
+    }
+
+    /* 如果从 deep sleep 定时唤醒，重置空闲计时 */
+    if (power_management_is_wakeup_from_sleep()) {
+        ESP_LOGI(TAG, "wakeup from deep sleep (timer)");
+        s_idle_seconds = 0;
+    }
+
+    /* 创建 1 秒周期空闲检测定时器 */
+    const esp_timer_create_args_t timer_args = {
+        .callback = idle_timer_cb,
+        .name = "idle_timer",
+        .arg = NULL,
+        .skip_unhandled_events = true,
+    };
+    esp_err_t err = esp_timer_create(&timer_args, &s_idle_timer);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "create idle timer failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    esp_timer_start_periodic(s_idle_timer, 1000000); /* 1 秒 */
+
+    return ESP_OK;
+}

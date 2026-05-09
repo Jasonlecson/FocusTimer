@@ -24,6 +24,7 @@
 #include "message_screen_calls.h"
 #include "nvs_storage.h"
 #include "nvs_flash.h"
+#include "power_management.h"
 
 #define TAG "main"
 
@@ -63,6 +64,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(sdcard_init(&sd_handle));
