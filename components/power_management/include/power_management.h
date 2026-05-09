@@ -62,11 +62,12 @@ bool power_management_is_wakeup_from_sleep(void);
  * @brief 是否因触摸操作从 deep sleep 唤醒
  */
 bool power_management_is_wakeup_by_touch(void);
+bool power_management_is_wakeup_from_timer(void);
 
 /**
  * @brief 主动进入 deep sleep（60 秒后定时唤醒 + 触摸中断唤醒）
  */
-void power_management_enter_deepsleep(void);
+void power_management_enter_deepsleep(uint16_t wakeup_time_ms);
 
 #ifdef __cplusplus
 }

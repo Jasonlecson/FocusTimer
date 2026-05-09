@@ -71,7 +71,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(audio_init(&audio_handle));
 
     // 屏幕及LVGL相关
-    bool wakeup_from_sleep = power_management_is_wakeup_from_sleep();
+    bool wakeup_from_timer = power_management_is_wakeup_from_timer();
     bool wakeup_by_touch = power_management_is_wakeup_by_touch();
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
     lvgl_user_init(panel_handle, io_handle);
@@ -82,14 +82,14 @@ void app_main(void)
     _lock_release(&lvgl_api_lock);
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
-    if (wakeup_from_sleep)
+    if (wakeup_from_timer)
     {
         lv_scr_load_anim(objects.main, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-        vTaskDelay(pdMS_TO_TICKS(150)); // 等待屏幕显示更新
+        vTaskDelay(pdMS_TO_TICKS(500)); // 等待屏幕显示更新
         // 自动从deepsleep唤醒时，更新显示后立即再次进入deepsleep
-        power_management_enter_deepsleep();
+        power_management_enter_deepsleep(58000); ///58s后唤醒
     }
-    if (!wakeup_from_sleep && !wakeup_by_touch)
+    if (!wakeup_from_timer && !wakeup_by_touch)
     {
         /* 正常启动：显示启动画面 */
         _lock_acquire(&lvgl_api_lock);
