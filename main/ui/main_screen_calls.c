@@ -14,6 +14,7 @@
 #include "lvgl_user.h"
 #include "nvs_storage.h"
 #include "screens.h"
+#include "power_management.h"
 
 #define MAIN_SCREEN_UPDATE_MS 60000
 #define MAIN_SCREEN_STCC4_WAIT_MS 2000
@@ -277,4 +278,14 @@ void main_screen_stop_update_task(void)
         ESP_LOGI(TAG, "Main screen update task stopped");
     }
     stcc4_stop_measurement_task();
+}
+
+void main_screen_start_idle_detect(void)
+{
+    power_management_start_idle_timer();
+}
+
+void main_screen_stop_idle_detect(void)
+{
+    power_management_stop_idle_timer();
 }

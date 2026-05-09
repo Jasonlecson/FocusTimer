@@ -9,8 +9,10 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_timer.h"
+#include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "pinmap.h"
 
 #define TAG "power_mgmt"
 
@@ -194,16 +196,61 @@ void power_management_reset_idle_timer(void)
     s_idle_seconds = 0;
 }
 
+void power_management_start_idle_timer(void)
+{
+    if (s_idle_timer == NULL) {
+        const esp_timer_create_args_t timer_args = {
+            .callback = idle_timer_cb,
+            .name = "idle_timer",
+            .arg = NULL,
+            .skip_unhandled_events = true,
+        };
+        esp_err_t err = esp_timer_create(&timer_args, &s_idle_timer);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "create idle timer failed: %s", esp_err_to_name(err));
+            return;
+        }
+    }
+    s_idle_seconds = 0;
+    esp_timer_start_periodic(s_idle_timer, 1000000); /* 1 秒 */
+    ESP_LOGD(TAG, "idle timer started");
+}
+
+void power_management_stop_idle_timer(void)
+{
+    if (s_idle_timer != NULL) {
+        esp_timer_stop(s_idle_timer);
+        ESP_LOGD(TAG, "idle timer stopped");
+    }
+    s_idle_seconds = 0;
+}
+
 /* ==================== Deep Sleep / Wakeup ==================== */
 
 bool power_management_is_wakeup_from_sleep(void)
 {
-    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    return (cause == ESP_SLEEP_WAKEUP_TIMER) || (cause == ESP_SLEEP_WAKEUP_EXT1);
+}
+
+bool power_management_is_wakeup_by_touch(void)
+{
+    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
 }
 
 void power_management_enter_deepsleep(void)
 {
+    /* 停止空闲计时器，避免 deep sleep 期间触发 */
+    power_management_stop_idle_timer();
+
+    /* 定时唤醒：每 60 秒更新时间显示 */
     esp_sleep_enable_timer_wakeup(DEEPSLEEP_WAKEUP_SEC * 1000000ULL);
+
+    /* 触摸芯片下降沿唤醒：用户触摸操作时唤醒 */
+    esp_sleep_enable_ext1_wakeup(BIT(TOUCH_INT_PIN), ESP_EXT1_WAKEUP_ANY_LOW);
+
+    ESP_LOGI(TAG, "entering deep sleep, wakeup: timer %ds + ext1 GPIO%d low",
+             DEEPSLEEP_WAKEUP_SEC, TOUCH_INT_PIN);
     esp_deep_sleep_start();
     /* 不会执行到这里 */
 }
@@ -227,23 +274,8 @@ esp_err_t power_management_init(void)
 
     /* 如果从 deep sleep 定时唤醒，重置空闲计时 */
     if (power_management_is_wakeup_from_sleep()) {
-        ESP_LOGI(TAG, "wakeup from deep sleep (timer)");
-        s_idle_seconds = 0;
+        ESP_LOGI(TAG, "wakeup from deep sleep");
     }
-
-    /* 创建 1 秒周期空闲检测定时器 */
-    const esp_timer_create_args_t timer_args = {
-        .callback = idle_timer_cb,
-        .name = "idle_timer",
-        .arg = NULL,
-        .skip_unhandled_events = true,
-    };
-    esp_err_t err = esp_timer_create(&timer_args, &s_idle_timer);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "create idle timer failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    esp_timer_start_periodic(s_idle_timer, 1000000); /* 1 秒 */
 
     return ESP_OK;
 }

@@ -7,6 +7,7 @@
 #include "esp_timer.h"
 #include "lvgl.h"
 #include "lvgl_user.h"
+#include "power_management.h"
 
 #define TAG "lvgl_indev"
 
@@ -147,6 +148,10 @@ static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
 void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
 {
     (void)user_ctx;
+    /* 用户有按键操作，重置空闲计时器（在临界区外调用） */
+    if (pressed) {
+        power_management_reset_idle_timer();
+    }
     taskENTER_CRITICAL(&s_enc_lock);
     if (!pressed)
     {
