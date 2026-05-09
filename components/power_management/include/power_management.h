@@ -51,6 +51,18 @@ void power_management_start_idle_timer(void);
  */
 void power_management_stop_idle_timer(void);
 
+/* ---- Deep sleep hooks ---- */
+
+typedef void (*power_management_hook_cb_t)(void *user_data);
+
+/**
+ * @brief 注册 deep sleep 前回调
+ *
+ * 在 power_management_enter_deepsleep() 内、调用 esp_deep_sleep_start() 前触发。
+ * 典型用途：外设（如 IMU）在 deep sleep 前关断以降低静态功耗。
+ */
+esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t cb, void *user_data);
+
 /* ---- Deep sleep / Wakeup ---- */
 
 /**

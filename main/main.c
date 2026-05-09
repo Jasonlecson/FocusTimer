@@ -53,6 +53,12 @@ static void shipping_mode_cb(void *user_data)
     _lock_release(&lvgl_api_lock);
 }
 
+static void pre_deepsleep_cb(void *user_data)
+{
+    (void)user_data;
+    (void)imu_prepare_for_deepsleep();
+}
+
 void app_main(void)
 {
     ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
@@ -66,6 +72,7 @@ void app_main(void)
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
+    (void)power_management_register_pre_deepsleep_cb(pre_deepsleep_cb, NULL);
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(sdcard_init(&sd_handle));

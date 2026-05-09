@@ -37,6 +37,9 @@
 /* ---- 运行时状态 ---- */
 static bool s_auto_lightsleep = DEFAULT_AUTO_LPM;
 static bool s_auto_sleep = DEFAULT_AUTO_SLEEP;
+
+static power_management_hook_cb_t s_pre_deepsleep_cb = NULL;
+static void *s_pre_deepsleep_user_data = NULL;
 static uint8_t s_charge_threshold = DEFAULT_CHG_THRESHOLD;
 
 static esp_timer_handle_t s_idle_timer = NULL;
@@ -263,10 +266,23 @@ bool power_management_is_wakeup_by_touch(void)
     return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
 }
 
+esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t cb, void *user_data)
+{
+    s_pre_deepsleep_cb = cb;
+    s_pre_deepsleep_user_data = user_data;
+    return ESP_OK;
+}
+
 void power_management_enter_deepsleep(uint16_t wakeup_time_ms)
 {
     /* 停止空闲计时器，避免 deep sleep 期间触发 */
     power_management_stop_idle_timer();
+
+    /* 外设准备：允许在 deep sleep 前关断耗电外设 */
+    if (s_pre_deepsleep_cb != NULL)
+    {
+        s_pre_deepsleep_cb(s_pre_deepsleep_user_data);
+    }
 
     /* 定时唤醒：每 60 秒更新时间显示 */
     esp_sleep_enable_timer_wakeup(wakeup_time_ms * 1000ULL);
