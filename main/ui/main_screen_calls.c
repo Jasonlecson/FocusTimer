@@ -178,35 +178,47 @@ static void update_main_screen_labels(const STCC4_value_t *sensor_value)
     _lock_release(&lvgl_api_lock);
 }
 
+esp_err_t main_screen_refresh_once(uint32_t timeout_ms)
+{
+    STCC4_value_t queue_value = {0};
+
+    update_main_screen_date_labels(true);
+
+    if (stcc4_task_handle == NULL)
+    {
+        stcc4_start_measurement_task();
+    }
+
+    if (stcc4_value_queue == NULL || stcc4_task_handle == NULL)
+    {
+        ESP_LOGW(TAG, "STCC4 queue/task not ready");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    while (xQueueReceive(stcc4_value_queue, &queue_value, 0) == pdPASS)
+    {
+    }
+
+    xTaskNotifyGive(stcc4_task_handle);
+    if (xQueueReceive(stcc4_value_queue, &queue_value, pdMS_TO_TICKS(timeout_ms)) != pdPASS)
+    {
+        ESP_LOGW(TAG, "Failed to receive fresh STCC4 data in time");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    update_main_screen_labels(&queue_value);
+    return ESP_OK;
+}
+
 static void main_screen_update_task(void *arg)
 {
     (void)arg;
-    STCC4_value_t queue_value = {0};
 
     while (1)
     {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        if (stcc4_value_queue == NULL || stcc4_task_handle == NULL)
-        {
-            ESP_LOGW(TAG, "STCC4 queue/task not ready");
-            continue;
-        }
-
-        // 丢弃旧的数据，确保每次更新都是最新的测量值
-        while (xQueueReceive(stcc4_value_queue, &queue_value, 0) == pdPASS)
-        {
-        }
-
-        xTaskNotifyGive(stcc4_task_handle);
-        if (xQueueReceive(stcc4_value_queue, &queue_value, pdMS_TO_TICKS(MAIN_SCREEN_STCC4_WAIT_MS)) == pdPASS)
-        {
-            update_main_screen_labels(&queue_value);
-        }
-        else
-        {
-            ESP_LOGW(TAG, "Failed to receive fresh STCC4 data in time");
-        }
+        (void)main_screen_refresh_once(MAIN_SCREEN_STCC4_WAIT_MS);
     }
 }
 
@@ -256,6 +268,8 @@ void main_screen_start_update_task(void)
     {
         ESP_LOGE(TAG, "Failed to start main screen timer: %s", esp_err_to_name(err));
     }
+
+    update_main_screen_date_labels(false);
 
     // 启动后立即刷新一次，避免等待第一个周期
     main_screen_notify_update_task();

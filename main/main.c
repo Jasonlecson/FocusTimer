@@ -22,6 +22,7 @@
 #include "aw32001.h"
 #include "battery.h"
 #include "message_screen_calls.h"
+#include "main_screen_calls.h"
 #include "nvs_storage.h"
 #include "nvs_flash.h"
 #include "power_management.h"
@@ -84,8 +85,7 @@ void app_main(void)
 
     if (wakeup_from_timer)
     {
-        lv_scr_load_anim(objects.main, LV_SCR_LOAD_ANIM_NONE, 0, 0, true);
-        vTaskDelay(pdMS_TO_TICKS(500)); // 等待屏幕显示更新
+        (void)main_screen_refresh_once(1200);
         // 自动从deepsleep唤醒时，更新显示后立即再次进入deepsleep
         power_management_enter_deepsleep(58000); ///58s后唤醒
     }
