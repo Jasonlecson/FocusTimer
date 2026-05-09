@@ -501,9 +501,14 @@ static void mp3_screen_update_task(void *arg)
 		}
 
 		TickType_t now = xTaskGetTickCount();
-		if (ui_dirty || now >= next_ui_refresh_tick) {
+		bool periodic_refresh = (s_state.playing && !s_state.paused);
+		if (ui_dirty || (periodic_refresh && now >= next_ui_refresh_tick)) {
 			s_refresh_ui();
-			next_ui_refresh_tick = now + pdMS_TO_TICKS(MP3_UI_REFRESH_INTERVAL_MS);
+			if (periodic_refresh) {
+				next_ui_refresh_tick = now + pdMS_TO_TICKS(MP3_UI_REFRESH_INTERVAL_MS);
+			} else {
+				next_ui_refresh_tick = now;
+			}
 			ui_dirty = false;
 		}
 
@@ -514,12 +519,12 @@ static void mp3_screen_update_task(void *arg)
 			s_state.track_duration_ms = 0;
 			s_state.track_position_ms = 0;
 			ui_dirty = true;
-			ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(300));
+			ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 			continue;
 		}
 
 		if (s_state.paused && !s_state.playing) {
-			ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+			ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 			continue;
 		}
 
@@ -541,7 +546,7 @@ static void mp3_screen_update_task(void *arg)
 		}
 
 		if (s_state.paused) {
-			ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+			ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 			continue;
 		}
 
