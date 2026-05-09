@@ -24,6 +24,7 @@
 #include "message_screen_calls.h"
 #include "nvs_storage.h"
 #include "nvs_flash.h"
+#include "power_management.h"
 
 #define TAG "main"
 
@@ -63,20 +64,39 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(sdcard_init(&sd_handle));
     ESP_ERROR_CHECK_WITHOUT_ABORT(audio_init(&audio_handle));
 
     // 屏幕及LVGL相关
+    bool wakeup_from_sleep = power_management_is_wakeup_from_sleep();
+    bool wakeup_by_touch = power_management_is_wakeup_by_touch();
+
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
     lvgl_user_init(panel_handle, io_handle);
     _lock_acquire(&lvgl_api_lock);
     create_screens();
     lv_scr_load(objects.main);
-    lv_scr_load_anim(objects.start, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
     lvgl_indev_init();
     _lock_release(&lvgl_api_lock);
+
+    if (wakeup_from_sleep) {
+        /* 从深度睡眠唤醒：跳过启动画面，直接显示主界面 */
+        ESP_LOGI(TAG, "wakeup from deep sleep (%s), skip start screen",
+                 wakeup_by_touch ? "touch" : "timer");
+        if (wakeup_by_touch) {
+            /* 触摸唤醒表示用户主动操作，关闭自动休眠 */
+            power_management_set_auto_sleep(false);
+        }
+    } else {
+        /* 正常启动：显示启动画面 */
+        _lock_acquire(&lvgl_api_lock);
+        lv_scr_load_anim(objects.start, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
+        _lock_release(&lvgl_api_lock);
+    }
+
     imu_start_flip_detection_task();
 
     // 注册shipping mode回调并启动电源按键检测
@@ -84,8 +104,11 @@ void app_main(void)
     aw32001_power_key_init();
     vTaskDelay(pdMS_TO_TICKS(50));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
-    vTaskDelay(pdTICKS_TO_MS(1000));
-    _lock_acquire(&lvgl_api_lock);
-    lv_scr_load_anim(objects.main, LV_SCR_LOAD_ANIM_OVER_BOTTOM, 300, 0, true);
-    _lock_release(&lvgl_api_lock);
+
+    if (!wakeup_from_sleep) {
+        vTaskDelay(pdTICKS_TO_MS(1000));
+        _lock_acquire(&lvgl_api_lock);
+        lv_scr_load_anim(objects.main, LV_SCR_LOAD_ANIM_OVER_BOTTOM, 300, 0, true);
+        _lock_release(&lvgl_api_lock);
+    }
 }

@@ -82,8 +82,7 @@ void remove_style_btn_style(lv_obj_t *obj) {
 //
 
 void init_style_checkbox_style_MAIN_DEFAULT(lv_style_t *style) {
-    lv_style_set_text_color(style, lv_color_hex(0xffffffff));
-    lv_style_set_text_font(style, &lv_font_montserrat_14);
+    lv_style_set_text_font(style, &ui_font_siyuanheiti_20);
 };
 
 lv_style_t *get_style_checkbox_style_MAIN_DEFAULT() {
@@ -113,8 +112,8 @@ lv_style_t *get_style_checkbox_style_MAIN_FOCUS_KEY() {
 };
 
 void init_style_checkbox_style_INDICATOR_DEFAULT(lv_style_t *style) {
-    lv_style_set_border_color(style, lv_color_hex(0xffffffff));
-    lv_style_set_bg_color(style, lv_color_hex(0xff000000));
+    lv_style_set_border_color(style, lv_color_hex(0xff000000));
+    lv_style_set_border_width(style, 3);
 };
 
 lv_style_t *get_style_checkbox_style_INDICATOR_DEFAULT() {
@@ -128,7 +127,9 @@ lv_style_t *get_style_checkbox_style_INDICATOR_DEFAULT() {
 };
 
 void init_style_checkbox_style_INDICATOR_CHECKED(lv_style_t *style) {
+    lv_style_set_border_color(style, lv_color_hex(0xff000000));
     lv_style_set_bg_color(style, lv_color_hex(0xff000000));
+    lv_style_set_border_width(style, 3);
 };
 
 lv_style_t *get_style_checkbox_style_INDICATOR_CHECKED() {
@@ -141,12 +142,28 @@ lv_style_t *get_style_checkbox_style_INDICATOR_CHECKED() {
     return style;
 };
 
+void init_style_checkbox_style_INDICATOR_FOCUSED(lv_style_t *style) {
+    lv_style_set_border_color(style, lv_color_hex(0xff000000));
+    lv_style_set_border_width(style, 4);
+};
+
+lv_style_t *get_style_checkbox_style_INDICATOR_FOCUSED() {
+    static lv_style_t *style;
+    if (!style) {
+        style = (lv_style_t *)lv_malloc(sizeof(lv_style_t));
+        lv_style_init(style);
+        init_style_checkbox_style_INDICATOR_FOCUSED(style);
+    }
+    return style;
+};
+
 void add_style_checkbox_style(lv_obj_t *obj) {
     (void)obj;
     lv_obj_add_style(obj, get_style_checkbox_style_MAIN_DEFAULT(), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_style(obj, get_style_checkbox_style_MAIN_FOCUS_KEY(), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
     lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_DEFAULT(), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_CHECKED(), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_FOCUSED(), LV_PART_INDICATOR | LV_STATE_FOCUSED);
 };
 
 void remove_style_checkbox_style(lv_obj_t *obj) {
@@ -155,6 +172,7 @@ void remove_style_checkbox_style(lv_obj_t *obj) {
     lv_obj_remove_style(obj, get_style_checkbox_style_MAIN_FOCUS_KEY(), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
     lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_DEFAULT(), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_CHECKED(), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_FOCUSED(), LV_PART_INDICATOR | LV_STATE_FOCUSED);
 };
 
 //

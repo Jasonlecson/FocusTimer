@@ -12,7 +12,8 @@ extern void action_back_to_main_btn(lv_event_t * e);
 extern void action_main_scr(lv_event_t * e);
 extern void action_submain_scr_enter_pomodoro_btn(lv_event_t * e);
 extern void action_submain_scr_enter_mp3_btn(lv_event_t * e);
-extern void action_submain_scr_enter_setting_btn(lv_event_t * e);
+extern void action_submain_scr_enter_time_setting_btn(lv_event_t * e);
+extern void action_submain_scr_enter_power_setting_btn(lv_event_t * e);
 extern void action_pomodoro_scr(lv_event_t * e);
 extern void action_pomodoro_scr_start_pause_btn(lv_event_t * e);
 extern void action_pomodoro_scr_reset_btn(lv_event_t * e);
@@ -23,8 +24,10 @@ extern void action_mp3_scr_backward_btn(lv_event_t * e);
 extern void action_mp3_scr_play_pause_btn(lv_event_t * e);
 extern void action_mp3_scr_forward_btn(lv_event_t * e);
 extern void action_mp3_scr_volume_slider(lv_event_t * e);
-extern void action_setting_scr_date_btn(lv_event_t * e);
-extern void action_setting_scr(lv_event_t * e);
+extern void action_time_setting_scr_date_btn(lv_event_t * e);
+extern void action_time_setting_scr(lv_event_t * e);
+extern void action_power_setting_scr_charge_limit_slider(lv_event_t * e);
+extern void action_power_setting_scr(lv_event_t * e);
 
 #ifdef __cplusplus
 }

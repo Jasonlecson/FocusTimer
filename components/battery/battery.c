@@ -10,6 +10,7 @@
 #include "adc_battery_estimation.h"
 #include "aw32001.h"
 #include "battery.h"
+#include "power_management.h"
 
 #define TAG "battery"
 
@@ -34,6 +35,7 @@ static TaskHandle_t s_battery_task_handle = NULL;
 
 static float s_capacity = 0.0f;
 static bool s_is_charging = false;
+static bool s_charge_disabled_by_threshold = false;
 
 static bool battery_charging_detect_cb(void *user_data)
 {
@@ -86,11 +88,6 @@ static void battery_monitor_task(void *arg)
 
         esp_err_t err_cap = adc_battery_estimation_get_capacity(s_battery_handle, &capacity);
 
-        if (charge_was_paused)
-        {
-            aw32001_enable_charge();
-        }
-
         if (err_cap == ESP_OK)
         {
             s_capacity = capacity;
@@ -98,6 +95,29 @@ static void battery_monitor_task(void *arg)
         else
         {
             ESP_LOGW(TAG, "get battery capacity failed: %s", esp_err_to_name(err_cap));
+        }
+
+        /* 充电阈值控制：电量 >= 阈值时停止充电，降到阈值-2%以下才恢复 */
+        if (charge_was_paused)
+        {
+            uint8_t threshold = power_management_get_charge_threshold();
+            if (s_capacity >= (float)threshold) {
+                s_charge_disabled_by_threshold = true;
+                ESP_LOGI(TAG, "capacity %.1f%% >= threshold %d%%, stop charging", s_capacity, threshold);
+            } else {
+                aw32001_enable_charge();
+                s_charge_disabled_by_threshold = false;
+            }
+        }
+        else if (s_charge_disabled_by_threshold)
+        {
+            uint8_t threshold = power_management_get_charge_threshold();
+            float resume_level = (float)threshold - 2.0f;
+            if (s_capacity < resume_level) {
+                aw32001_enable_charge();
+                s_charge_disabled_by_threshold = false;
+                ESP_LOGI(TAG, "capacity %.1f%% < resume level %.1f%%, resume charging", s_capacity, resume_level);
+            }
         }
 
         s_is_charging = is_charging;

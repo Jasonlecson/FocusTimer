@@ -1,4 +1,4 @@
 idf_component_register(SRCS "battery.c"
-                    REQUIRES aw32001 esp_adc
+                    REQUIRES aw32001 esp_adc power_management
                     PRIV_REQUIRES espressif__adc_battery_estimation
                     INCLUDE_DIRS "include")

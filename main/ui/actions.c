@@ -15,6 +15,7 @@
 #include "pomodoro_screen_calls.h"
 #include "message_screen_calls.h"
 #include "setting_screen_calls.h"
+#include "power_setting_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
@@ -58,10 +59,12 @@ void action_main_scr(lv_event_t *e)
     if (code == LV_EVENT_SCREEN_LOADED)
     {
         main_screen_start_update_task();
+        main_screen_start_idle_detect();
     }
     if (code == LV_EVENT_SCREEN_UNLOADED)
     {
         main_screen_stop_update_task();
+        main_screen_stop_idle_detect();
     }
 }
 
@@ -95,7 +98,7 @@ void action_submain_scr_enter_mp3_btn(lv_event_t *e)
     }
 }
 
-void action_submain_scr_enter_setting_btn(lv_event_t *e)
+void action_submain_scr_enter_time_setting_btn(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_SHORT_CLICKED)
@@ -104,7 +107,7 @@ void action_submain_scr_enter_setting_btn(lv_event_t *e)
         {
             return;
         }
-        lv_screen_load_anim(objects.setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+        lv_screen_load_anim(objects.time_setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
     }
 }
 
@@ -240,12 +243,35 @@ void action_mp3_scr_volume_slider(lv_event_t *e)
     }
 }
 
-void action_setting_scr_date_btn(lv_event_t *e)
+void action_time_setting_scr_date_btn(lv_event_t *e)
 {
-    handle_setting_date_btn_event(e);
+    handle_time_setting_date_btn_event(e);
 }
 
-void action_setting_scr(lv_event_t *e)
+void action_time_setting_scr(lv_event_t *e)
 {
-    handle_setting_screen_load_unload_event(e);
+    handle_time_setting_screen_load_unload_event(e);
+}
+
+void action_submain_scr_enter_power_setting_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.power_setting, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+    }
+}
+
+void action_power_setting_scr_charge_limit_slider(lv_event_t *e)
+{
+    handle_power_setting_scr_charge_limit_slider_event(e);
+}
+
+void action_power_setting_scr(lv_event_t *e)
+{
+    handle_power_setting_scr_event(e);
 }
