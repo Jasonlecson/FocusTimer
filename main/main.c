@@ -91,6 +91,8 @@ void app_main(void)
     bool wakeup_by_touch = power_management_is_wakeup_by_touch();
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
     lvgl_user_init(panel_handle, io_handle);
+    power_management_register_panel(panel_handle);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
     _lock_acquire(&lvgl_api_lock);
     create_screens();
     lv_scr_load(objects.main);
@@ -106,7 +108,6 @@ void app_main(void)
     }
     if (!wakeup_from_timer && !wakeup_by_touch)
     {
-        power_management_register_panel(panel_handle);
         esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
         /* 正常启动：显示启动画面 */
         _lock_acquire(&lvgl_api_lock);
@@ -125,5 +126,4 @@ void app_main(void)
     aw32001_power_key_init();
     vTaskDelay(pdMS_TO_TICKS(50));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
 }

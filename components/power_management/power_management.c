@@ -29,7 +29,8 @@
 #define DEFAULT_CHG_THRESHOLD 90
 
 /* ---- 空闲超时 ---- */
-#define IDLE_TIMEOUT_SEC (5 * 60) /* 5 分钟 */
+#define SCREEN_LPM_TIMEOUT_SEC (1)
+#define DEEPSLEEP_IDLE_TIMEOUT_SEC (5 * 60)
 
 /* ---- 频率配置 ---- */
 #define PM_MAX_FREQ_MHZ 96
@@ -48,6 +49,7 @@ static esp_timer_handle_t s_idle_timer = NULL;
 static int32_t s_idle_seconds = 0;
 static int32_t s_screen_idle_seconds = 0;
 static bool s_screen_in_lpm = false;
+static bool s_deepsleep_idle_detect_enabled = false;
 
 static void set_screen_power_mode(st7305_power_mode_t power_mode)
 {
@@ -174,10 +176,6 @@ esp_err_t power_management_set_auto_lightsleep(bool enable)
 {
     s_auto_lightsleep = enable;
     nvs_write_bool(NVS_KEY_AUTO_LPM, enable);
-    if (!enable)
-    {
-        set_screen_power_mode(ST7305_PWR_MODE_HPM);
-    }
     return apply_auto_lightsleep(enable);
 }
 
@@ -242,18 +240,18 @@ static void idle_timer_cb(void *arg)
     (void)arg;
 
     s_screen_idle_seconds++;
-    if (s_screen_idle_seconds >= IDLE_TIMEOUT_SEC)
+    if (s_screen_idle_seconds >= SCREEN_LPM_TIMEOUT_SEC)
     {
         set_screen_power_mode(ST7305_PWR_MODE_LPM);
     }
 
-    if (!s_auto_sleep)
+    if (!s_auto_sleep || !s_deepsleep_idle_detect_enabled)
         return;
 
     s_idle_seconds++;
-    if (s_idle_seconds >= IDLE_TIMEOUT_SEC)
+    if (s_idle_seconds >= DEEPSLEEP_IDLE_TIMEOUT_SEC)
     {
-        ESP_LOGI(TAG, "idle timeout %ds, entering deep sleep", IDLE_TIMEOUT_SEC);
+        ESP_LOGI(TAG, "idle timeout %ds, entering deep sleep", DEEPSLEEP_IDLE_TIMEOUT_SEC);
         power_management_enter_deepsleep(60 * 1000);
     }
 }
@@ -299,6 +297,18 @@ void power_management_stop_idle_timer(void)
         ESP_LOGD(TAG, "idle timer stopped");
     }
     power_management_reset_idle_timer();
+}
+
+void power_management_start_deepsleep_idle_detect(void)
+{
+    s_deepsleep_idle_detect_enabled = true;
+    s_idle_seconds = 0;
+}
+
+void power_management_stop_deepsleep_idle_detect(void)
+{
+    s_deepsleep_idle_detect_enabled = false;
+    s_idle_seconds = 0;
 }
 
 /* ==================== Deep Sleep / Wakeup ==================== */
@@ -366,6 +376,8 @@ esp_err_t power_management_init(void)
     {
         apply_auto_lightsleep(true);
     }
+
+    s_deepsleep_idle_detect_enabled = false;
 
     power_management_start_idle_timer();
     return ESP_OK;

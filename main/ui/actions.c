@@ -59,6 +59,11 @@ void action_main_scr(lv_event_t *e)
     if (code == LV_EVENT_SCREEN_LOADED)
     {
         main_screen_start_update_task();
+        main_screen_start_idle_detect();
+    }
+    if (code == LV_EVENT_SCREEN_UNLOADED)
+    {
+        main_screen_stop_idle_detect();
     }
 }
 
