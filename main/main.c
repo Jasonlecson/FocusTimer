@@ -26,6 +26,7 @@
 #include "nvs_storage.h"
 #include "nvs_flash.h"
 #include "power_management.h"
+#include "st7305_2p9.h"
 
 #define TAG "main"
 
@@ -62,6 +63,7 @@ static void pre_deepsleep_cb(void *user_data)
     {
         ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
     }
+    esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
 
     (void)imu_prepare_for_deepsleep();
 }
@@ -104,6 +106,7 @@ void app_main(void)
     }
     if (!wakeup_from_timer && !wakeup_by_touch)
     {
+        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
         /* 正常启动：显示启动画面 */
         _lock_acquire(&lvgl_api_lock);
         lv_scr_load_anim(objects.start, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);
