@@ -106,6 +106,7 @@ void app_main(void)
     }
     if (!wakeup_from_timer && !wakeup_by_touch)
     {
+        power_management_register_panel(panel_handle);
         esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
         /* 正常启动：显示启动画面 */
         _lock_acquire(&lvgl_api_lock);

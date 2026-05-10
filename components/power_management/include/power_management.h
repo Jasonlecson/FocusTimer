@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include "esp_err.h"
 
+struct esp_lcd_panel_t;
+typedef struct esp_lcd_panel_t *esp_lcd_panel_handle_t;
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -23,6 +26,16 @@ esp_err_t power_management_init(void);
 
 esp_err_t power_management_set_auto_lightsleep(bool enable);
 bool power_management_get_auto_lightsleep(void);
+
+/**
+ * @brief 注册用于屏幕功耗切换的 LCD panel 句柄
+ */
+void power_management_register_panel(esp_lcd_panel_handle_t panel);
+
+/**
+ * @brief 记录一次用户活动；必要时会先将屏幕切回高功耗模式
+ */
+void power_management_notify_user_activity(void);
 
 /* ---- 自动休眠 ---- */
 

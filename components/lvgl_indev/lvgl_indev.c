@@ -148,9 +148,10 @@ static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
 void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
 {
     (void)user_ctx;
-    /* 用户有按键操作，重置空闲计时器（在临界区外调用） */
-    if (pressed) {
-        power_management_reset_idle_timer();
+    /* 用户有按键操作时，先恢复屏幕到 HPM 并重置空闲计时 */
+    if (pressed)
+    {
+        power_management_notify_user_activity();
     }
     taskENTER_CRITICAL(&s_enc_lock);
     if (!pressed)

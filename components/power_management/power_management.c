@@ -12,6 +12,7 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "st7305_2p9.h"
 #include "pinmap.h"
 
 #define TAG "power_mgmt"
@@ -41,9 +42,32 @@ static bool s_auto_sleep = DEFAULT_AUTO_SLEEP;
 static power_management_hook_cb_t s_pre_deepsleep_cb = NULL;
 static void *s_pre_deepsleep_user_data = NULL;
 static uint8_t s_charge_threshold = DEFAULT_CHG_THRESHOLD;
+static esp_lcd_panel_handle_t s_panel_handle = NULL;
 
 static esp_timer_handle_t s_idle_timer = NULL;
 static int32_t s_idle_seconds = 0;
+static int32_t s_screen_idle_seconds = 0;
+static bool s_screen_in_lpm = false;
+
+static void set_screen_power_mode(st7305_power_mode_t power_mode)
+{
+    if (s_panel_handle == NULL)
+        return;
+
+    bool target_lpm = (power_mode == ST7305_PWR_MODE_LPM);
+    if (s_screen_in_lpm == target_lpm)
+        return;
+
+    esp_err_t err = esp_lcd_panel_st7305_set_power_mode(s_panel_handle, power_mode);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set screen power mode %s failed: %s",
+                 target_lpm ? "LPM" : "HPM", esp_err_to_name(err));
+        return;
+    }
+
+    s_screen_in_lpm = target_lpm;
+}
 
 /* ==================== NVS 辅助 ==================== */
 
@@ -150,12 +174,29 @@ esp_err_t power_management_set_auto_lightsleep(bool enable)
 {
     s_auto_lightsleep = enable;
     nvs_write_bool(NVS_KEY_AUTO_LPM, enable);
+    if (!enable)
+    {
+        set_screen_power_mode(ST7305_PWR_MODE_HPM);
+    }
     return apply_auto_lightsleep(enable);
 }
 
 bool power_management_get_auto_lightsleep(void)
 {
     return s_auto_lightsleep;
+}
+
+void power_management_register_panel(esp_lcd_panel_handle_t panel)
+{
+    s_panel_handle = panel;
+    s_screen_in_lpm = false;
+}
+
+void power_management_notify_user_activity(void)
+{
+    set_screen_power_mode(ST7305_PWR_MODE_HPM);
+
+    power_management_reset_idle_timer();
 }
 
 /* ==================== 自动休眠 ==================== */
@@ -200,6 +241,12 @@ static void idle_timer_cb(void *arg)
 {
     (void)arg;
 
+    s_screen_idle_seconds++;
+    if (s_screen_idle_seconds >= IDLE_TIMEOUT_SEC)
+    {
+        set_screen_power_mode(ST7305_PWR_MODE_LPM);
+    }
+
     if (!s_auto_sleep)
         return;
 
@@ -214,6 +261,7 @@ static void idle_timer_cb(void *arg)
 void power_management_reset_idle_timer(void)
 {
     s_idle_seconds = 0;
+    s_screen_idle_seconds = 0;
 }
 
 void power_management_start_idle_timer(void)
@@ -233,8 +281,13 @@ void power_management_start_idle_timer(void)
             return;
         }
     }
-    s_idle_seconds = 0;
-    esp_timer_start_periodic(s_idle_timer, 1000000); /* 1 秒 */
+    power_management_reset_idle_timer();
+    esp_err_t err = esp_timer_is_active(s_idle_timer) ? esp_timer_restart(s_idle_timer, 1000000) : esp_timer_start_periodic(s_idle_timer, 1000000);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "start idle timer failed: %s", esp_err_to_name(err));
+        return;
+    }
     ESP_LOGD(TAG, "idle timer started");
 }
 
@@ -245,7 +298,7 @@ void power_management_stop_idle_timer(void)
         esp_timer_stop(s_idle_timer);
         ESP_LOGD(TAG, "idle timer stopped");
     }
-    s_idle_seconds = 0;
+    power_management_reset_idle_timer();
 }
 
 /* ==================== Deep Sleep / Wakeup ==================== */
@@ -313,5 +366,7 @@ esp_err_t power_management_init(void)
     {
         apply_auto_lightsleep(true);
     }
+
+    power_management_start_idle_timer();
     return ESP_OK;
 }
