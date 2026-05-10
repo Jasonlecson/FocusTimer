@@ -71,7 +71,6 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
-    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
     (void)power_management_register_pre_deepsleep_cb(pre_deepsleep_cb, NULL);
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
@@ -115,4 +114,5 @@ void app_main(void)
     aw32001_power_key_init();
     vTaskDelay(pdMS_TO_TICKS(50));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
 }

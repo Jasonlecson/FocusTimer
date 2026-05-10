@@ -313,12 +313,5 @@ esp_err_t power_management_init(void)
     {
         apply_auto_lightsleep(true);
     }
-
-    /* 如果从 deep sleep 定时唤醒，重置空闲计时 */
-    if (power_management_is_wakeup_from_sleep())
-    {
-        ESP_LOGI(TAG, "wakeup from deep sleep");
-    }
-
     return ESP_OK;
 }
