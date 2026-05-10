@@ -16,6 +16,8 @@
 static const char *TAG = "AW96103";
 
 #define KEY_COUNT 3
+#define AW96103_CMD_ACTIVE_MODE 0x00000001U
+#define AW96103_CMD_DOZE_MODE 0x00000002U
 
 // AW96103 register addresses
 #define REG_SCANCTRL0 0x0000
@@ -38,6 +40,14 @@ static aw96103_config_t s_cfg;
 static bool s_started;
 static aw96103_key_event_cb_t s_key_event_cb;
 static void *s_key_event_user_ctx;
+static esp_err_t aw96103_write_reg(uint16_t reg_addr, uint32_t data);
+static esp_err_t aw96103_read_reg(uint16_t reg_addr, uint32_t *data);
+
+static esp_err_t aw96103_set_mode(uint32_t cmd)
+{
+    ESP_RETURN_ON_FALSE(s_started, ESP_ERR_INVALID_STATE, TAG, "device not initialized");
+    return ESP_OK;
+}
 
 void aw96103_register_key_event_cb(aw96103_key_event_cb_t cb, void *user_ctx)
 {
@@ -112,9 +122,14 @@ static esp_err_t aw96103_chip_init(void)
     val = (val & 0xFFFF0000U) | (s_cfg.doze_mode_interval << 11) |(s_cfg.scan_period / 2);
     ESP_RETURN_ON_ERROR(aw96103_write_reg(REG_SCANCTRL1, val), TAG, "write SCANCTRL1 failed");
 
-    ESP_RETURN_ON_ERROR(aw96103_write_reg(REG_CMD, 0x00000001), TAG, "switch to active mode failed");
+    ESP_RETURN_ON_ERROR(aw96103_write_reg(REG_CMD, AW96103_CMD_ACTIVE_MODE), TAG, "switch to active mode failed");
 
     return ESP_OK;
+}
+
+esp_err_t aw96103_enter_doze_mode(void)
+{
+    return aw96103_set_mode(AW96103_CMD_DOZE_MODE);
 }
 
 static void IRAM_ATTR gpio_isr_handler(void *arg)

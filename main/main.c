@@ -56,6 +56,13 @@ static void shipping_mode_cb(void *user_data)
 static void pre_deepsleep_cb(void *user_data)
 {
     (void)user_data;
+
+    esp_err_t err = aw96103_enter_doze_mode();
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
+    }
+
     (void)imu_prepare_for_deepsleep();
 }
 
