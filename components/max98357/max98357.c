@@ -33,6 +33,32 @@ typedef struct {
 
 static const char *TAG = "max98357";
 
+static esp_err_t s_set_power_pin_level(bool enable)
+{
+    esp_err_t ret;
+
+    if (enable) {
+        ret = gpio_hold_dis(AUDIO_SD);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+
+        return gpio_set_level(AUDIO_SD, 1);
+    }
+
+    ret = gpio_set_level(AUDIO_SD, 0);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    ret = gpio_hold_en(AUDIO_SD);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    return ESP_OK;
+}
+
 static esp_err_t s_config_power_pin(void)
 {
     gpio_config_t io_conf = {
@@ -190,7 +216,7 @@ esp_err_t max98357_init(max98357_handle_t *handle)
     }
 
     // 默认关闭功放，等到播放时才打开
-    ret = gpio_set_level(AUDIO_SD, 0);
+    ret = s_set_power_pin_level(false);
     if (ret != ESP_OK) {
         return ret;
     }
@@ -218,7 +244,7 @@ esp_err_t max98357_set_enabled(max98357_handle_t *handle, bool enable)
         return ESP_ERR_INVALID_STATE;
     }
 
-    return gpio_set_level(AUDIO_SD, enable ? 1 : 0);
+    return s_set_power_pin_level(enable);
 }
 
 esp_err_t max98357_play_wav_file(max98357_handle_t *handle, const char *path)

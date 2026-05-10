@@ -155,7 +155,8 @@ esp_err_t icm42670_acce_set_pwr(icm42670_handle_t sensor, icm42670_acce_pwr_t st
     ret = icm42670_read(sensor, ICM42670_PWR_MGMT0, &data, 1);
     if (ret == ESP_OK)
     {
-        data |= (state & 0x03);
+        /* PWR_MGMT0[1:0] = accel mode */
+        data = (data & (uint8_t)~0x03) | (state & 0x03);
 
         ret = icm42670_write(sensor, ICM42670_PWR_MGMT0, &data, sizeof(data));
     }
@@ -171,7 +172,8 @@ esp_err_t icm42670_gyro_set_pwr(icm42670_handle_t sensor, icm42670_gyro_pwr_t st
     ret = icm42670_read(sensor, ICM42670_PWR_MGMT0, &data, 1);
     if (ret == ESP_OK)
     {
-        data |= ((state & 0x03) << 2);
+        /* PWR_MGMT0[3:2] = gyro mode */
+        data = (data & (uint8_t)~(0x03 << 2)) | ((state & 0x03) << 2);
 
         ret = icm42670_write(sensor, ICM42670_PWR_MGMT0, &data, sizeof(data));
     }
@@ -537,10 +539,10 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
     }
     ESP_LOGI(LOG_TAG, "ICM42670 device ID: 0x%02X", device_id);
 
-    // 配置加速度计
+    // 配置加速度计（翻转检测用：低功耗优先）
     icm42670_cfg_t config = {
         .acce_fs = ACCE_FS_2G,     // ±2g 量程
-        .acce_odr = ACCE_ODR_50HZ, // 50Hz 采样率
+        .acce_odr = ACCE_ODR_12_5HZ, // 12.5Hz 采样率（足够翻转检测，功耗更低）
         .gyro_fs = GYRO_FS_250DPS, // 陀螺仪量程（翻转检测不需要，但需要配置）
         .gyro_odr = GYRO_ODR_50HZ,
     };
@@ -554,8 +556,8 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
         return ret;
     }
 
-    // 开启加速度计
-    ret = icm42670_acce_set_pwr(imu_handle, ACCE_PWR_LOWNOISE);
+    // 开启加速度计：LowPower 模式（比 LowNoise 省电很多）
+    ret = icm42670_acce_set_pwr(imu_handle, ACCE_PWR_LOWPOWER);
     if (ret != ESP_OK)
     {
         ESP_LOGE(LOG_TAG, "Failed to set accelerometer power: %s", esp_err_to_name(ret));
@@ -573,6 +575,22 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num)
 
     ESP_LOGI(LOG_TAG, "ICM42670 initialized successfully");
     return ESP_OK;
+}
+
+esp_err_t imu_prepare_for_deepsleep(void)
+{
+    imu_stop_flip_detection_task();
+
+    if (imu_handle == NULL)
+    {
+        return ESP_OK;
+    }
+
+    /* 进入 deep sleep 前尽量把 IMU 关到最低功耗。
+     * 这里不 delete 句柄（deep sleep 不会返回），只做寄存器关断更稳妥。
+     */
+    (void)icm42670_gyro_set_pwr(imu_handle, GYRO_PWR_OFF);
+    return icm42670_acce_set_pwr(imu_handle, ACCE_PWR_OFF);
 }
 
 esp_err_t imu_deinit(void)

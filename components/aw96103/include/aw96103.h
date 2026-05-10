@@ -29,4 +29,5 @@ extern QueueHandle_t touch_int_evt_queue;
 typedef void (*aw96103_key_event_cb_t)(uint8_t key_index, bool pressed, void *user_ctx);
 
 esp_err_t aw96103_init();
+esp_err_t aw96103_enter_doze_mode(void);
 void aw96103_register_key_event_cb(aw96103_key_event_cb_t cb, void *user_ctx);

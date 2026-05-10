@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include "esp_err.h"
 
+struct esp_lcd_panel_t;
+typedef struct esp_lcd_panel_t *esp_lcd_panel_handle_t;
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -15,7 +18,7 @@ extern "C"
  * - 从 NVS 读取持久化配置（低功耗模式、自动休眠、充电阈值）
  * - 若 NVS 无记录则使用默认值：低功耗=false, 自动休眠=false, 充电阈值=90
  * - 若低功耗模式已启用，则立即调用 esp_pm_configure
- * - 空闲检测定时器需由主界面 load/unload 时手动 start/stop
+ * - 启动全局屏幕空闲检测，自动在无按键时切换屏幕到 LPM
  */
 esp_err_t power_management_init(void);
 
@@ -23,6 +26,16 @@ esp_err_t power_management_init(void);
 
 esp_err_t power_management_set_auto_lightsleep(bool enable);
 bool power_management_get_auto_lightsleep(void);
+
+/**
+ * @brief 注册用于屏幕功耗切换的 LCD panel 句柄
+ */
+void power_management_register_panel(esp_lcd_panel_handle_t panel);
+
+/**
+ * @brief 记录一次用户活动；必要时会先将屏幕切回高功耗模式
+ */
+void power_management_notify_user_activity(void);
 
 /* ---- 自动休眠 ---- */
 
@@ -42,14 +55,36 @@ uint8_t power_management_get_charge_threshold(void);
 void power_management_reset_idle_timer(void);
 
 /**
- * @brief 启动空闲检测定时器（主界面 load 时调用）
+ * @brief 启动全局空闲检测定时器（开机调用）
  */
 void power_management_start_idle_timer(void);
 
 /**
- * @brief 停止空闲检测定时器（主界面 unload 时调用）
+ * @brief 停止全局空闲检测定时器
  */
 void power_management_stop_idle_timer(void);
+
+/**
+ * @brief 启动仅 main 屏幕生效的 deep sleep 空闲检测
+ */
+void power_management_start_deepsleep_idle_detect(void);
+
+/**
+ * @brief 停止仅 main 屏幕生效的 deep sleep 空闲检测
+ */
+void power_management_stop_deepsleep_idle_detect(void);
+
+/* ---- Deep sleep hooks ---- */
+
+typedef void (*power_management_hook_cb_t)(void *user_data);
+
+/**
+ * @brief 注册 deep sleep 前回调
+ *
+ * 在 power_management_enter_deepsleep() 内、调用 esp_deep_sleep_start() 前触发。
+ * 典型用途：外设（如 IMU）在 deep sleep 前关断以降低静态功耗。
+ */
+esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t cb, void *user_data);
 
 /* ---- Deep sleep / Wakeup ---- */
 

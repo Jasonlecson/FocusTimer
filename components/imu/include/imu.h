@@ -389,6 +389,14 @@ esp_err_t imu_init(i2c_port_num_t i2c_port_num);
 esp_err_t imu_deinit(void);
 
 /**
+ * @brief 进入 deep sleep 前的 IMU 省电处理
+ *
+ * - 停止翻转检测任务
+ * - 关闭陀螺仪与加速度计，避免 deep sleep 期间 IMU 仍然耗电
+ */
+esp_err_t imu_prepare_for_deepsleep(void);
+
+/**
  * @brief 启动翻转检测任务
  * 
  */

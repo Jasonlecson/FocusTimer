@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "pinmap.h"
+#include "power_management.h"
 
 #define TAG "AW32001"
 
@@ -518,6 +519,8 @@ static void pwr_key_monitor_task(void *arg)
     {
         if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY))
         {
+            power_management_notify_user_activity();
+
             // 收到上升沿中断，按键已按下，开始计时
             int press_duration_ms = 0;
             while (gpio_get_level(PWR_KEY_PIN) == 1)

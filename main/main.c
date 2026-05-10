@@ -26,6 +26,7 @@
 #include "nvs_storage.h"
 #include "nvs_flash.h"
 #include "power_management.h"
+#include "st7305_2p9.h"
 
 #define TAG "main"
 
@@ -53,6 +54,20 @@ static void shipping_mode_cb(void *user_data)
     _lock_release(&lvgl_api_lock);
 }
 
+static void pre_deepsleep_cb(void *user_data)
+{
+    (void)user_data;
+
+    esp_err_t err = aw96103_enter_doze_mode();
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "set aw96103 doze mode before deep sleep failed: %s", esp_err_to_name(err));
+    }
+    esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+
+    (void)imu_prepare_for_deepsleep();
+}
+
 void app_main(void)
 {
     ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
@@ -65,7 +80,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     aw96103_register_key_event_cb(aw_touch_key_event_cb, NULL);
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
-    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
+    (void)power_management_register_pre_deepsleep_cb(pre_deepsleep_cb, NULL);
     spi_shared_lock_init();
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(sdcard_init(&sd_handle));
@@ -76,6 +91,8 @@ void app_main(void)
     bool wakeup_by_touch = power_management_is_wakeup_by_touch();
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
     lvgl_user_init(panel_handle, io_handle);
+    power_management_register_panel(panel_handle);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(power_management_init());
     _lock_acquire(&lvgl_api_lock);
     create_screens();
     lv_scr_load(objects.main);
@@ -91,6 +108,7 @@ void app_main(void)
     }
     if (!wakeup_from_timer && !wakeup_by_touch)
     {
+        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
         /* 正常启动：显示启动画面 */
         _lock_acquire(&lvgl_api_lock);
         lv_scr_load_anim(objects.start, LV_SCR_LOAD_ANIM_NONE, 0, 0, false);

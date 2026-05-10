@@ -296,10 +296,10 @@ void main_screen_stop_update_task(void)
 
 void main_screen_start_idle_detect(void)
 {
-    power_management_start_idle_timer();
+    power_management_start_deepsleep_idle_detect();
 }
 
 void main_screen_stop_idle_detect(void)
 {
-    power_management_stop_idle_timer();
+    power_management_stop_deepsleep_idle_detect();
 }
