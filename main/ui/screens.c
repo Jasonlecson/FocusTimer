@@ -278,7 +278,7 @@ void create_screen_sub_main() {
             objects.submain_scr_enter_power_setting_btn_1 = obj;
             lv_obj_set_pos(obj, 150, 77);
             lv_obj_set_size(obj, 90, 40);
-            lv_obj_add_event_cb(obj, action_submain_scr_enter_power_setting_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_submain_scr_enter_data_sync_scr, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;

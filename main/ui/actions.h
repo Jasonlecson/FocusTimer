@@ -29,6 +29,7 @@ extern void action_time_setting_scr(lv_event_t * e);
 extern void action_power_setting_scr_charge_limit_slider(lv_event_t * e);
 extern void action_power_setting_scr(lv_event_t * e);
 extern void action_data_sync_scr(lv_event_t * e);
+extern void action_submain_scr_enter_data_sync_scr(lv_event_t * e);
 
 #ifdef __cplusplus
 }

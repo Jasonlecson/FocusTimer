@@ -44,6 +44,18 @@ static uint16_t history_chr_val_handle;
 static bool ble_connected;
 static uint16_t ble_conn_handle;
 static uint8_t own_addr_type;
+static bool ble_synced;
+static bool ble_adv_enabled;
+
+static ble_connection_state_cb_t s_conn_state_cb;
+static void *s_conn_state_cb_arg;
+
+static void ble_notify_conn_state(bool connected)
+{
+    if (s_conn_state_cb != NULL) {
+        s_conn_state_cb(connected, s_conn_state_cb_arg);
+    }
+}
 
 /* Forward declarations */
 static void ble_host_task(void *param);
@@ -140,10 +152,14 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         if (event->connect.status == 0) {
             ble_connected = true;
             ble_conn_handle = event->connect.conn_handle;
+            ble_notify_conn_state(true);
         } else {
             /* Connection failed; resume advertising */
             ble_connected = false;
-            ble_start_advertising();
+            ble_notify_conn_state(false);
+            if (ble_adv_enabled) {
+                ble_start_advertising();
+            }
         }
         break;
 
@@ -151,7 +167,10 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         ESP_LOGD(TAG, "BLE_GAP_EVENT_DISCONNECT; reason=%d",
                  event->disconnect.reason);
         ble_connected = false;
-        ble_start_advertising();
+        ble_notify_conn_state(false);
+        if (ble_adv_enabled) {
+            ble_start_advertising();
+        }
         break;
 
     case BLE_GAP_EVENT_ADV_COMPLETE:
@@ -182,8 +201,13 @@ static void ble_on_sync(void)
         return;
     }
 
-    ESP_LOGI(TAG, "BLE synced, starting advertising");
-    ble_start_advertising();
+    ble_synced = true;
+    ESP_LOGI(TAG, "BLE synced");
+
+    if (ble_adv_enabled) {
+        ESP_LOGI(TAG, "BLE advertising enabled, starting advertising");
+        ble_start_advertising();
+    }
 }
 
 /*** BLE reset callback ***/
@@ -191,6 +215,8 @@ static void ble_on_reset(int reason)
 {
     ESP_LOGE(TAG, "BLE host reset; reason=%d", reason);
     ble_connected = false;
+    ble_synced = false;
+    ble_notify_conn_state(false);
 }
 
 /*** NimBLE host task ***/
@@ -206,6 +232,11 @@ static void ble_host_task(void *param)
 esp_err_t ble_init(void)
 {
     int rc;
+
+    ble_connected = false;
+    ble_synced = false;
+    ble_adv_enabled = false;
+    ble_conn_handle = 0;
 
     rc = nimble_port_init();
     if (rc != ESP_OK) {
@@ -261,6 +292,15 @@ esp_err_t ble_start_advertising(void)
     struct ble_hs_adv_fields rsp_fields;
     int rc;
 
+    if (!ble_synced) {
+        ESP_LOGW(TAG, "BLE not synced yet, cannot start advertising");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (ble_gap_adv_active()) {
+        return ESP_OK;
+    }
+
     /* --- Advertising data: flags + 128-bit service UUID (fits in 31 bytes) --- */
     memset(&adv_fields, 0, sizeof(adv_fields));
     adv_fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
@@ -309,6 +349,11 @@ esp_err_t ble_stop(void)
 {
     int rc;
 
+    if (!ble_synced) {
+        ble_connected = false;
+        return ESP_OK;
+    }
+
     if (ble_connected) {
         rc = ble_gap_terminate(ble_conn_handle, BLE_ERR_REM_USER_CONN_TERM);
         if (rc != 0) {
@@ -327,6 +372,37 @@ esp_err_t ble_stop(void)
     }
 
     return ESP_OK;
+}
+
+esp_err_t ble_set_advertising_enabled(bool enabled)
+{
+    ble_adv_enabled = enabled;
+
+    if (!enabled) {
+        return ble_stop();
+    }
+
+    if (!ble_synced) {
+        // Will be started from ble_on_sync()
+        return ESP_OK;
+    }
+
+    if (!ble_connected) {
+        return ble_start_advertising();
+    }
+
+    return ESP_OK;
+}
+
+bool ble_is_advertising_enabled(void)
+{
+    return ble_adv_enabled;
+}
+
+void ble_register_connection_state_cb(ble_connection_state_cb_t cb, void *arg)
+{
+    s_conn_state_cb = cb;
+    s_conn_state_cb_arg = arg;
 }
 
 bool ble_is_connected(void)
