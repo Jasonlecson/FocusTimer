@@ -11,15 +11,16 @@
 
 #include "ble.h"
 #include "nvs_storage.h"
+#include "esp_bt.h"
 
 #define TAG "BLE"
 
 /* Device name advertised over BLE */
 #define BLE_DEVICE_NAME "FocusTimer"
 
-/* Advertising interval (0.625ms units): 160 = 100ms */
-#define BLE_ADV_INTERVAL_MIN 160
-#define BLE_ADV_INTERVAL_MAX 160
+/* Advertising interval (0.625ms units): 800 = 0.5s */
+#define BLE_ADV_INTERVAL_MIN 800
+#define BLE_ADV_INTERVAL_MAX 3200
 
 /* Custom 128-bit UUIDs for the FocusTimer service and characteristics */
 /* Service: 12345678-1234-5678-1234-56789abcdef0 */
@@ -89,7 +90,7 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 
     switch (ctxt->op) {
     case BLE_GATT_ACCESS_OP_READ_CHR:
-        ESP_LOGI(TAG, "GATT read: conn_handle=%d attr_handle=%d",
+        ESP_LOGD(TAG, "GATT read: conn_handle=%d attr_handle=%d",
                  conn_handle, attr_handle);
 
         if (attr_handle == current_day_chr_val_handle) {
@@ -134,7 +135,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
 {
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
-        ESP_LOGI(TAG, "BLE_GAP_EVENT_CONNECT; status=%d",
+        ESP_LOGD(TAG, "BLE_GAP_EVENT_CONNECT; status=%d",
                  event->connect.status);
         if (event->connect.status == 0) {
             ble_connected = true;
@@ -147,19 +148,19 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         break;
 
     case BLE_GAP_EVENT_DISCONNECT:
-        ESP_LOGI(TAG, "BLE_GAP_EVENT_DISCONNECT; reason=%d",
+        ESP_LOGD(TAG, "BLE_GAP_EVENT_DISCONNECT; reason=%d",
                  event->disconnect.reason);
         ble_connected = false;
         ble_start_advertising();
         break;
 
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        ESP_LOGI(TAG, "BLE_GAP_EVENT_ADV_COMPLETE; reason=%d",
+        ESP_LOGD(TAG, "BLE_GAP_EVENT_ADV_COMPLETE; reason=%d",
                  event->adv_complete.reason);
         break;
 
     case BLE_GAP_EVENT_MTU:
-        ESP_LOGI(TAG, "MTU update: conn_handle=%d mtu=%d",
+        ESP_LOGD(TAG, "MTU update: conn_handle=%d mtu=%d",
                  event->mtu.conn_handle, event->mtu.value);
         break;
 
