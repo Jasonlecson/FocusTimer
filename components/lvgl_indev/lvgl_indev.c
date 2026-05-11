@@ -71,10 +71,57 @@ static void scan_and_save_focusables(lv_obj_t *parent, page_focus_t *page)
     }
 }
 
+static void remove_page_at(uint32_t idx)
+{
+    if (idx >= s_page_count)
+        return;
+    // 将后续条目前移填补空位
+    for (uint32_t i = idx; i < s_page_count - 1; i++)
+    {
+        s_page_focus_list[i] = s_page_focus_list[i + 1];
+    }
+    s_page_count--;
+    // 清空最后一个（已前移的冗余副本）
+    memset(&s_page_focus_list[s_page_count], 0, sizeof(page_focus_t));
+}
+
+// 当屏幕被删除时调用，清除静态数组中该屏幕的缓存，避免悬空指针
+void lvgl_indev_invalidate_screen(lv_obj_t *screen)
+{
+    if (screen == NULL)
+        return;
+
+    // 如果当前跟踪的屏幕就是被删除的，清除跟踪
+    if (g_current_screen == screen)
+        g_current_screen = NULL;
+
+    // 从静态数组中移除该屏幕的条目
+    int idx = find_page_index(screen);
+    if (idx >= 0)
+    {
+        // 先将该页面中的控件从 group 中移除
+        for (uint32_t i = 0; i < s_page_focus_list[idx].item_count; i++)
+        {
+            lv_obj_t *item = s_page_focus_list[idx].items[i];
+            if (item != NULL && lv_obj_is_valid(item))
+            {
+                lv_group_remove_obj(item);
+            }
+        }
+        remove_page_at(idx);
+    }
+}
+
 // 定时器回调：用于监测当前页面切换
 static void screen_tracker_timer_cb(lv_timer_t *timer)
 {
     lv_obj_t *active_screen = lv_screen_active();
+
+    // 安全检查：如果 g_current_screen 指向已被删除的屏幕，清除它
+    if (g_current_screen != NULL && !lv_obj_is_valid(g_current_screen))
+    {
+        g_current_screen = NULL;
+    }
 
     // 如果发现活动页面发生变化（即切换了页面）
     if (active_screen != g_current_screen)
