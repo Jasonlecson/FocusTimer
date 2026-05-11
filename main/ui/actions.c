@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_sleep.h"
 #include "lvgl_user.h"
+#include "lvgl_indev.h"
 #include "stcc4.h"
 #include "main_screen_calls.h"
 #include "mp3_screen_calls.h"
@@ -177,6 +178,7 @@ void action_mp3_scr(lv_event_t *e)
     if (code == LV_EVENT_SCREEN_UNLOADED)
     {
         mp3_screen_stop_update_task();
+        lvgl_indev_invalidate_screen(lv_event_get_target(e));
         objects.mp3 = NULL;
         objects.mp3_scr_back_to_main_btn = NULL;
         objects.mp3_scr_musictitle_label = NULL;
