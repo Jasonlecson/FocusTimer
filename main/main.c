@@ -27,6 +27,7 @@
 #include "nvs_flash.h"
 #include "power_management.h"
 #include "st7305_2p9.h"
+#include "ble.h"
 
 #define TAG "main"
 
@@ -58,6 +59,8 @@ static void pre_deepsleep_cb(void *user_data)
 {
     (void)user_data;
 
+    ble_stop();
+
     esp_err_t err = aw96103_enter_doze_mode();
     if (err != ESP_OK)
     {
@@ -74,6 +77,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(ble_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(imu_init(I2C_NUM_0));
