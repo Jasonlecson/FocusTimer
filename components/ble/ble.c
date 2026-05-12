@@ -46,6 +46,7 @@ static uint16_t ble_conn_handle;
 static uint8_t own_addr_type;
 static bool ble_synced;
 static bool ble_adv_enabled;
+static bool ble_inited;
 
 static ble_connection_state_cb_t s_conn_state_cb;
 static void *s_conn_state_cb_arg;
@@ -55,6 +56,37 @@ static void ble_notify_conn_state(bool connected)
     if (s_conn_state_cb != NULL) {
         s_conn_state_cb(connected, s_conn_state_cb_arg);
     }
+}
+
+static esp_err_t ble_stack_deinit(void)
+{
+    if (!ble_inited) {
+        ble_adv_enabled = false;
+        ble_synced = false;
+        ble_connected = false;
+        return ESP_OK;
+    }
+
+    ble_adv_enabled = false;
+
+    // Best-effort stop advertising / terminate connection.
+    (void)ble_stop();
+
+    int rc = nimble_port_stop();
+    if (rc != 0) {
+        ESP_LOGW(TAG, "nimble_port_stop failed: %d", rc);
+    }
+
+    nimble_port_deinit();
+
+    ble_inited = false;
+    ble_synced = false;
+    ble_connected = false;
+    ble_conn_handle = 0;
+    own_addr_type = 0;
+
+    ESP_LOGI(TAG, "BLE stack deinitialized");
+    return ESP_OK;
 }
 
 /* Forward declarations */
@@ -233,9 +265,12 @@ esp_err_t ble_init(void)
 {
     int rc;
 
+    if (ble_inited) {
+        return ESP_OK;
+    }
+
     ble_connected = false;
     ble_synced = false;
-    ble_adv_enabled = false;
     ble_conn_handle = 0;
 
     rc = nimble_port_init();
@@ -282,6 +317,7 @@ esp_err_t ble_init(void)
     nimble_port_freertos_init(ble_host_task);
 
     ESP_LOGI(TAG, "BLE init OK");
+    ble_inited = true;
     return ESP_OK;
 }
 
@@ -291,6 +327,10 @@ esp_err_t ble_start_advertising(void)
     struct ble_hs_adv_fields adv_fields;
     struct ble_hs_adv_fields rsp_fields;
     int rc;
+
+    if (!ble_inited) {
+        return ESP_ERR_INVALID_STATE;
+    }
 
     if (!ble_synced) {
         ESP_LOGW(TAG, "BLE not synced yet, cannot start advertising");
@@ -349,6 +389,11 @@ esp_err_t ble_stop(void)
 {
     int rc;
 
+    if (!ble_inited) {
+        ble_connected = false;
+        return ESP_OK;
+    }
+
     if (!ble_synced) {
         ble_connected = false;
         return ESP_OK;
@@ -376,10 +421,19 @@ esp_err_t ble_stop(void)
 
 esp_err_t ble_set_advertising_enabled(bool enabled)
 {
-    ble_adv_enabled = enabled;
-
     if (!enabled) {
-        return ble_stop();
+        // Fully shutdown BLE stack to restore lowest light-sleep current.
+        return ble_stack_deinit();
+    }
+
+    ble_adv_enabled = true;
+
+    if (!ble_inited) {
+        esp_err_t err = ble_init();
+        if (err != ESP_OK) {
+            ble_adv_enabled = false;
+            return err;
+        }
     }
 
     if (!ble_synced) {

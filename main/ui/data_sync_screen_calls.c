@@ -9,6 +9,10 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+
 #define TAG "data_sync_scr"
 
 #define DATA_SYNC_BLE_TIMEOUT_US (120ULL * 1000000ULL)
@@ -17,6 +21,14 @@ static esp_timer_handle_t s_ble_timeout_timer = NULL;
 static bool s_checkbox_cb_attached = false;
 static bool s_ignore_checkbox_event = false;
 static bool s_ble_cb_registered = false;
+
+typedef struct {
+    bool enable;
+    bool update_checkbox;
+} data_sync_ble_cmd_t;
+
+static QueueHandle_t s_ble_cmd_queue = NULL;
+static TaskHandle_t s_ble_ctrl_task_handle = NULL;
 
 static void data_sync_update_status_label(bool connected)
 {
@@ -80,12 +92,13 @@ static void data_sync_ble_timeout_cb(void *arg)
     }
 
     // Auto-close advertising if nobody connected within timeout.
-    (void)ble_set_advertising_enabled(false);
-
-    _lock_acquire(&lvgl_api_lock);
-    data_sync_set_checkbox_checked(false);
-    data_sync_update_status_label(false);
-    _lock_release(&lvgl_api_lock);
+    if (s_ble_cmd_queue != NULL) {
+        data_sync_ble_cmd_t cmd = {
+            .enable = false,
+            .update_checkbox = true,
+        };
+        (void)xQueueOverwrite(s_ble_cmd_queue, &cmd);
+    }
 }
 
 static void data_sync_ble_conn_state_cb(bool connected, void *arg)
@@ -120,7 +133,13 @@ static void data_sync_ble_checkbox_event_cb(lv_event_t *e)
 
     bool checked = lv_obj_has_state(objects.data_sync_scr_ble_checkbox, LV_STATE_CHECKED);
     if (checked) {
-        (void)ble_set_advertising_enabled(true);
+        if (s_ble_cmd_queue != NULL) {
+            data_sync_ble_cmd_t cmd = {
+                .enable = true,
+                .update_checkbox = false,
+            };
+            (void)xQueueOverwrite(s_ble_cmd_queue, &cmd);
+        }
         data_sync_update_status_label(ble_is_connected());
         if (!ble_is_connected()) {
             // Start 2-min countdown from the moment user enables BLE.
@@ -128,14 +147,51 @@ static void data_sync_ble_checkbox_event_cb(lv_event_t *e)
             data_sync_start_timeout_timer_if_needed();
         }
     } else {
-        (void)ble_set_advertising_enabled(false);
+        if (s_ble_cmd_queue != NULL) {
+            data_sync_ble_cmd_t cmd = {
+                .enable = false,
+                .update_checkbox = false,
+            };
+            (void)xQueueOverwrite(s_ble_cmd_queue, &cmd);
+        }
         data_sync_stop_timeout_timer();
         data_sync_update_status_label(false);
     }
 }
 
+static void data_sync_ble_ctrl_task(void *arg)
+{
+    (void)arg;
+
+    data_sync_ble_cmd_t cmd;
+    while (1) {
+        if (xQueueReceive(s_ble_cmd_queue, &cmd, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+
+        (void)ble_set_advertising_enabled(cmd.enable);
+
+        if (!cmd.enable) {
+            _lock_acquire(&lvgl_api_lock);
+            if (cmd.update_checkbox) {
+                data_sync_set_checkbox_checked(false);
+            }
+            data_sync_update_status_label(false);
+            _lock_release(&lvgl_api_lock);
+        }
+    }
+}
+
 static void data_sync_init_once(void)
 {
+    if (s_ble_cmd_queue == NULL) {
+        s_ble_cmd_queue = xQueueCreate(1, sizeof(data_sync_ble_cmd_t));
+    }
+
+    if (s_ble_ctrl_task_handle == NULL && s_ble_cmd_queue != NULL) {
+        (void)xTaskCreate(data_sync_ble_ctrl_task, "ds_ble_ctl", 4096, NULL, 5, &s_ble_ctrl_task_handle);
+    }
+
     if (s_ble_timeout_timer == NULL) {
         const esp_timer_create_args_t timeout_timer_args = {
             .callback = data_sync_ble_timeout_cb,

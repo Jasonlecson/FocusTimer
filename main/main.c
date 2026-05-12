@@ -59,7 +59,7 @@ static void pre_deepsleep_cb(void *user_data)
 {
     (void)user_data;
 
-    ble_stop();
+    (void)ble_set_advertising_enabled(false);
 
     esp_err_t err = aw96103_enter_doze_mode();
     if (err != ESP_OK)
