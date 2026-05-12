@@ -1,6 +1,9 @@
 #include <string.h>
+#include <stdlib.h>
 #include "esp_log.h"
 #include "nvs_flash.h"
+
+#include "cJSON.h"
 
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -12,6 +15,7 @@
 #include "ble.h"
 #include "nvs_storage.h"
 #include "esp_bt.h"
+#include "pcf85263a.h"
 
 #define TAG "BLE"
 
@@ -38,8 +42,14 @@ static const ble_uuid128_t history_chr_uuid =
     BLE_UUID128_INIT(0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
+/* Characteristic 3 (set datetime JSON): 00000000-0000-0000-0000-0000-0000-0003 */
+static const ble_uuid128_t datetime_set_chr_uuid =
+    BLE_UUID128_INIT(0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+
 static uint16_t current_day_chr_val_handle;
 static uint16_t history_chr_val_handle;
+static uint16_t datetime_set_chr_val_handle;
 
 static bool ble_connected;
 static uint16_t ble_conn_handle;
@@ -50,11 +60,20 @@ static bool ble_inited;
 
 static ble_connection_state_cb_t s_conn_state_cb;
 static void *s_conn_state_cb_arg;
+static ble_datetime_updated_cb_t s_datetime_updated_cb;
+static void *s_datetime_updated_cb_arg;
 
 static void ble_notify_conn_state(bool connected)
 {
     if (s_conn_state_cb != NULL) {
         s_conn_state_cb(connected, s_conn_state_cb_arg);
+    }
+}
+
+static void ble_notify_datetime_updated(void)
+{
+    if (s_datetime_updated_cb != NULL) {
+        s_datetime_updated_cb(s_datetime_updated_cb_arg);
     }
 }
 
@@ -96,7 +115,126 @@ static void ble_on_reset(int reason);
 static int gap_event_handler(struct ble_gap_event *event, void *arg);
 static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                           struct ble_gatt_access_ctxt *ctxt, void *arg);
+static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt);
+static esp_err_t ble_parse_datetime_json(const char *json, pcf85263a_datetime_t *datetime);
 void ble_store_config_init(void);
+
+static bool ble_json_get_int(const cJSON *object, const char *name, int *value)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, name);
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+
+    *value = item->valueint;
+    return true;
+}
+
+static esp_err_t ble_parse_datetime_json(const char *json, pcf85263a_datetime_t *datetime)
+{
+    cJSON *root = cJSON_Parse(json);
+    if (root == NULL) {
+        ESP_LOGW(TAG, "Invalid datetime JSON");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const cJSON *date = cJSON_GetObjectItemCaseSensitive(root, "date");
+    const cJSON *time = cJSON_GetObjectItemCaseSensitive(root, "time");
+    const cJSON *weekday = cJSON_GetObjectItemCaseSensitive(root, "weekday");
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    int weekday_index = 0;
+
+    if (!cJSON_IsObject(date) ||
+        !ble_json_get_int(date, "year", &year) ||
+        !ble_json_get_int(date, "month", &month) ||
+        !ble_json_get_int(date, "day", &day) ||
+        !cJSON_IsObject(time) ||
+        !ble_json_get_int(time, "hour", &hour) ||
+        !ble_json_get_int(time, "minute", &minute) ||
+        !ble_json_get_int(time, "second", &second) ||
+        !cJSON_IsObject(weekday) ||
+        !ble_json_get_int(weekday, "index", &weekday_index)) {
+        cJSON_Delete(root);
+        ESP_LOGW(TAG, "Datetime JSON missing required fields");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON_Delete(root);
+
+    if (year < 2000 || year > 2099 ||
+        month < 1 || month > 12 ||
+        day < 1 || day > 31 ||
+        hour < 0 || hour > 23 ||
+        minute < 0 || minute > 59 ||
+        second < 0 || second > 59 ||
+        weekday_index < 0 || weekday_index > 6) {
+        ESP_LOGW(TAG, "Datetime JSON value out of range");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    datetime->year = (uint16_t)year;
+    datetime->month = (uint8_t)month;
+    datetime->day = (uint8_t)day;
+    datetime->hour = (uint8_t)hour;
+    datetime->minute = (uint8_t)minute;
+    datetime->second = (uint8_t)second;
+    datetime->weekday = (uint8_t)weekday_index;
+    return ESP_OK;
+}
+
+static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt)
+{
+    uint16_t payload_len = OS_MBUF_PKTLEN(ctxt->om);
+    char *json_buf = NULL;
+    pcf85263a_datetime_t datetime = {0};
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+
+    if (rtc_handle == NULL) {
+        ESP_LOGE(TAG, "RTC handle unavailable");
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    if (payload_len == 0U) {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    json_buf = calloc((size_t)payload_len + 1U, sizeof(char));
+    if (json_buf == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate datetime JSON buffer");
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+
+    int rc = os_mbuf_copydata(ctxt->om, 0, payload_len, json_buf);
+    if (rc != 0) {
+        free(json_buf);
+        ESP_LOGE(TAG, "Failed to copy datetime payload: %d", rc);
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    esp_err_t err = ble_parse_datetime_json(json_buf, &datetime);
+    free(json_buf);
+    if (err != ESP_OK) {
+        return BLE_ATT_ERR_INVALID_PDU;
+    }
+
+    err = pcf85263a_set_datetime(rtc_handle, &datetime);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to set RTC datetime: %s", esp_err_to_name(err));
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    ble_notify_datetime_updated();
+
+    ESP_LOGI(TAG, "RTC datetime updated over BLE: %u-%02u-%02u %02u:%02u:%02u weekday=%u",
+             datetime.year, datetime.month, datetime.day,
+             datetime.hour, datetime.minute, datetime.second, datetime.weekday);
+    return 0;
+}
 
 /*** GATT service definition ***/
 static const struct ble_gatt_svc_def gatt_svcs[] = {
@@ -116,6 +254,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .access_cb = gatt_access_cb,
                 .flags = BLE_GATT_CHR_F_READ,
                 .val_handle = &history_chr_val_handle,
+            }, {
+                /* Set RTC datetime JSON */
+                .uuid = &datetime_set_chr_uuid.u,
+                .access_cb = gatt_access_cb,
+                .flags = BLE_GATT_CHR_F_WRITE,
+                .val_handle = &datetime_set_chr_val_handle,
             }, {
                 0, /* Terminator */
             },
@@ -164,6 +308,15 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
             rc = os_mbuf_append(ctxt->om, json_buf, json_len);
             free(json_buf);
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
+        break;
+
+    case BLE_GATT_ACCESS_OP_WRITE_CHR:
+        ESP_LOGD(TAG, "GATT write: conn_handle=%d attr_handle=%d",
+                 conn_handle, attr_handle);
+
+        if (attr_handle == datetime_set_chr_val_handle) {
+            return ble_handle_datetime_write(ctxt);
         }
         break;
 
@@ -457,6 +610,12 @@ void ble_register_connection_state_cb(ble_connection_state_cb_t cb, void *arg)
 {
     s_conn_state_cb = cb;
     s_conn_state_cb_arg = arg;
+}
+
+void ble_register_datetime_updated_cb(ble_datetime_updated_cb_t cb, void *arg)
+{
+    s_datetime_updated_cb = cb;
+    s_datetime_updated_cb_arg = arg;
 }
 
 bool ble_is_connected(void)

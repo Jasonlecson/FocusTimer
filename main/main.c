@@ -74,6 +74,12 @@ static void pre_deepsleep_cb(void *user_data)
     (void)imu_prepare_for_deepsleep();
 }
 
+static void ble_datetime_updated_cb(void *user_data)
+{
+    (void)user_data;
+    update_main_screen_date_labels(true);
+}
+
 void app_main(void)
 {
     esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
@@ -112,6 +118,7 @@ void app_main(void)
     lv_scr_load(objects.main);
     lvgl_indev_init();
     _lock_release(&lvgl_api_lock);
+    ble_register_datetime_updated_cb(ble_datetime_updated_cb, NULL);
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
     /* 如果是触摸唤醒，通常意味着用户要操作。
