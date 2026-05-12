@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_sleep.h"
 #include "lvgl_user.h"
+#include "lvgl_indev.h"
 #include "stcc4.h"
 #include "main_screen_calls.h"
 #include "mp3_screen_calls.h"
@@ -16,6 +17,7 @@
 #include "message_screen_calls.h"
 #include "setting_screen_calls.h"
 #include "power_setting_screen_calls.h"
+#include "data_sync_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
@@ -177,6 +179,7 @@ void action_mp3_scr(lv_event_t *e)
     if (code == LV_EVENT_SCREEN_UNLOADED)
     {
         mp3_screen_stop_update_task();
+        lvgl_indev_invalidate_screen(lv_event_get_target(e));
         objects.mp3 = NULL;
         objects.mp3_scr_back_to_main_btn = NULL;
         objects.mp3_scr_musictitle_label = NULL;
@@ -273,4 +276,22 @@ void action_power_setting_scr_charge_limit_slider(lv_event_t *e)
 void action_power_setting_scr(lv_event_t *e)
 {
     handle_power_setting_scr_event(e);
+}
+
+void action_submain_scr_enter_data_sync_scr(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.data_sync, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+    }
+}
+
+void action_data_sync_scr(lv_event_t *e)
+{
+    handle_data_sync_scr_event(e);
 }

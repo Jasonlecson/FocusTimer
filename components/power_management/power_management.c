@@ -347,11 +347,20 @@ void power_management_enter_deepsleep(uint16_t wakeup_time_ms)
         s_pre_deepsleep_cb(s_pre_deepsleep_user_data);
     }
 
-    /* 定时唤醒：每 60 秒更新时间显示 */
-    esp_sleep_enable_timer_wakeup(wakeup_time_ms * 1000ULL);
+    /* 定时唤醒：定期更新时间显示 */
+    esp_err_t err = esp_sleep_enable_timer_wakeup(wakeup_time_ms * 1000ULL);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "enable timer wakeup failed: %s", esp_err_to_name(err));
+    }
 
-    /* 触摸芯片下降沿唤醒：用户触摸操作时唤醒 */
-    esp_sleep_enable_ext1_wakeup(BIT(TOUCH_INT_PIN), ESP_EXT1_WAKEUP_ANY_LOW);
+    /* 触摸芯片低电平唤醒：用户触摸操作时唤醒（ext1 为电平唤醒） */
+    err = esp_sleep_enable_ext1_wakeup(BIT(TOUCH_INT_PIN), ESP_EXT1_WAKEUP_ANY_LOW);
+    if (err != ESP_OK)
+    {
+        /* 若该 GPIO 不是 RTC IO，ext1 可能会返回 ESP_ERR_INVALID_ARG，从而导致触摸无法唤醒 */
+        ESP_LOGE(TAG, "enable ext1 wakeup failed (GPIO%d): %s", TOUCH_INT_PIN, esp_err_to_name(err));
+    }
 
     ESP_LOGI(TAG, "entering deep sleep, wakeup: timer %u ms + ext1 GPIO%d low",
              wakeup_time_ms, TOUCH_INT_PIN);

@@ -46,7 +46,22 @@ static esp_err_t aw96103_read_reg(uint16_t reg_addr, uint32_t *data);
 static esp_err_t aw96103_set_mode(uint32_t cmd)
 {
     ESP_RETURN_ON_FALSE(s_started, ESP_ERR_INVALID_STATE, TAG, "device not initialized");
-    return ESP_OK;
+
+    /* 注意：本项目用 TOUCH_INT_PIN 做 deep sleep 的唤醒源。
+       实测/经验上，直接下发 DOZE 命令可能会导致触摸中断不再拉低（或无法产生新的唤醒电平），
+       从而出现“ext1 手动唤醒无响应”。
+       因此这里仅在切回 ACTIVE 时写 REG_CMD；进入 DOZE 时保持当前模式，
+       依靠 scan/doze 间隔配置降低功耗，同时保证 INT 唤醒能力。
+     */
+    if (cmd == AW96103_CMD_ACTIVE_MODE)
+    {
+        return aw96103_write_reg(REG_CMD, cmd);
+    }
+    if (cmd == AW96103_CMD_DOZE_MODE)
+    {
+        return ESP_OK;
+    }
+    return ESP_ERR_INVALID_ARG;
 }
 
 void aw96103_register_key_event_cb(aw96103_key_event_cb_t cb, void *user_ctx)
@@ -255,6 +270,18 @@ esp_err_t aw96103_init()
                         "gpio_isr_handler_add failed");
 
     ESP_RETURN_ON_ERROR(aw96103_chip_init(), TAG, "aw96103 init failed");
+
+    /* 如果在上电/深睡唤醒时 INT 已经处于低电平（ext1 为电平唤醒常见），
+       可能不会再产生下降沿，从而导致后续按键事件收不到。
+       这里主动读一次 IRQSRC/STAT0 清除潜在的 latched IRQ，释放 INT 线，
+       让后续触摸能产生新的边沿中断。 */
+    if (gpio_get_level(s_cfg.int_io) == 0)
+    {
+        uint32_t dummy = 0;
+        (void)aw96103_read_reg(REG_IRQSRC, &dummy);
+        (void)aw96103_read_reg(REG_STAT0, &dummy);
+        ESP_LOGI(TAG, "cleared pending IRQ on init (INT was low)");
+    }
 
     s_started = true;
     ESP_LOGI(TAG, "AW96103 initialized. Waiting for touch...");

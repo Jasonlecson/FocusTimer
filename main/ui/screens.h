@@ -19,7 +19,8 @@ enum ScreensEnum {
     SCREEN_ID_POMODORO = 6,
     SCREEN_ID_MESSAGE = 7,
     SCREEN_ID_POWER_SETTING = 8,
-    _SCREEN_ID_LAST = 8
+    SCREEN_ID_DATA_SYNC = 9,
+    _SCREEN_ID_LAST = 9
 };
 
 typedef struct _objects_t {
@@ -31,6 +32,7 @@ typedef struct _objects_t {
     lv_obj_t *pomodoro;
     lv_obj_t *message;
     lv_obj_t *power_setting;
+    lv_obj_t *data_sync;
     lv_obj_t *main_scr_goto_submain_btn;
     lv_obj_t *main_scr_time_label;
     lv_obj_t *main_scr_temp_value_label;
@@ -45,6 +47,7 @@ typedef struct _objects_t {
     lv_obj_t *submain_scr_enter_time_setting_btn;
     lv_obj_t *submain_scr_enter_mp3_btn;
     lv_obj_t *submain_scr_enter_power_setting_btn;
+    lv_obj_t *submain_scr_enter_power_setting_btn_1;
     lv_obj_t *mp3_scr_back_to_main_btn;
     lv_obj_t *mp3_scr_musictitle_label;
     lv_obj_t *mp3_scr_play_progress;
@@ -79,6 +82,9 @@ typedef struct _objects_t {
     lv_obj_t *power_setting_scr_auto_sleep_checkbox;
     lv_obj_t *power_setting_scr_charge_limit_slider;
     lv_obj_t *power_setting_scr_charge_limit_label;
+    lv_obj_t *data_sync_back_to_main_btn;
+    lv_obj_t *data_sync_scr_ble_checkbox;
+    lv_obj_t *data_sync_scr_ble_status_label;
 } objects_t;
 
 extern objects_t objects;
@@ -106,6 +112,9 @@ void tick_screen_message();
 
 void create_screen_power_setting();
 void tick_screen_power_setting();
+
+void create_screen_data_sync();
+void tick_screen_data_sync();
 
 void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);

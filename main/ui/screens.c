@@ -200,15 +200,15 @@ void create_screen_sub_main() {
             // submain_scr_enter_pomodoro_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
             objects.submain_scr_enter_pomodoro_btn = obj;
-            lv_obj_set_pos(obj, 59, 24);
-            lv_obj_set_size(obj, 77, 40);
+            lv_obj_set_pos(obj, 50, 24);
+            lv_obj_set_size(obj, 90, 40);
             lv_obj_add_event_cb(obj, action_submain_scr_enter_pomodoro_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
                 {
                     lv_obj_t *obj = lv_label_create(parent_obj);
-                    lv_obj_set_pos(obj, -9, -4);
+                    lv_obj_set_pos(obj, -3, -4);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     add_style_btn_label_style(obj);
                     lv_label_set_text(obj, "番茄钟");
@@ -219,15 +219,15 @@ void create_screen_sub_main() {
             // submain_scr_enter_time_setting_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
             objects.submain_scr_enter_time_setting_btn = obj;
-            lv_obj_set_pos(obj, 154, 24);
-            lv_obj_set_size(obj, 77, 40);
+            lv_obj_set_pos(obj, 150, 24);
+            lv_obj_set_size(obj, 90, 40);
             lv_obj_add_event_cb(obj, action_submain_scr_enter_time_setting_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
                 {
                     lv_obj_t *obj = lv_label_create(parent_obj);
-                    lv_obj_set_pos(obj, 1, -4);
+                    lv_obj_set_pos(obj, 7, -4);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     add_style_btn_label_style(obj);
                     lv_label_set_text(obj, "时间");
@@ -238,15 +238,15 @@ void create_screen_sub_main() {
             // submain_scr_enter_mp3_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
             objects.submain_scr_enter_mp3_btn = obj;
-            lv_obj_set_pos(obj, 249, 24);
-            lv_obj_set_size(obj, 77, 40);
+            lv_obj_set_pos(obj, 250, 24);
+            lv_obj_set_size(obj, 90, 40);
             lv_obj_add_event_cb(obj, action_submain_scr_enter_mp3_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
                 {
                     lv_obj_t *obj = lv_label_create(parent_obj);
-                    lv_obj_set_pos(obj, 1, -4);
+                    lv_obj_set_pos(obj, 7, -4);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     add_style_btn_label_style(obj);
                     lv_label_set_text(obj, "MP3");
@@ -257,18 +257,37 @@ void create_screen_sub_main() {
             // submain_scr_enter_power_setting_btn
             lv_obj_t *obj = lv_button_create(parent_obj);
             objects.submain_scr_enter_power_setting_btn = obj;
-            lv_obj_set_pos(obj, 59, 77);
-            lv_obj_set_size(obj, 77, 40);
+            lv_obj_set_pos(obj, 50, 77);
+            lv_obj_set_size(obj, 90, 40);
             lv_obj_add_event_cb(obj, action_submain_scr_enter_power_setting_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
             add_style_btn_style(obj);
             {
                 lv_obj_t *parent_obj = obj;
                 {
                     lv_obj_t *obj = lv_label_create(parent_obj);
-                    lv_obj_set_pos(obj, 1, -4);
+                    lv_obj_set_pos(obj, 7, -4);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     add_style_btn_label_style(obj);
                     lv_label_set_text(obj, "电源");
+                }
+            }
+        }
+        {
+            // submain_scr_enter_power_setting_btn_1
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.submain_scr_enter_power_setting_btn_1 = obj;
+            lv_obj_set_pos(obj, 150, 77);
+            lv_obj_set_size(obj, 90, 40);
+            lv_obj_add_event_cb(obj, action_submain_scr_enter_data_sync_scr, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -13, -4);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_label_set_text(obj, "数据同步");
                 }
             }
         }
@@ -1034,6 +1053,77 @@ void create_screen_power_setting() {
 void tick_screen_power_setting() {
 }
 
+void create_screen_data_sync() {
+    lv_obj_t *obj = lv_obj_create(0);
+    objects.data_sync = obj;
+    lv_obj_set_pos(obj, 0, 0);
+    lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_data_sync_scr, LV_EVENT_SCREEN_LOAD_START, (void *)0);
+    lv_obj_add_event_cb(obj, action_data_sync_scr, LV_EVENT_SCREEN_UNLOAD_START, (void *)0);
+    add_style_screen_style_dark(obj);
+    {
+        lv_obj_t *parent_obj = obj;
+        {
+            // data_sync_back_to_main_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.data_sync_back_to_main_btn = obj;
+            lv_obj_set_pos(obj, 6, 5);
+            lv_obj_set_size(obj, 38, 29);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -1, 1);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_20, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "<-");
+                }
+            }
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 132, 8);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "蓝牙数据同步");
+        }
+        {
+            // data_sync_scr_ble_checkbox
+            lv_obj_t *obj = lv_checkbox_create(parent_obj);
+            objects.data_sync_scr_ble_checkbox = obj;
+            lv_obj_set_pos(obj, 73, 40);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_checkbox_set_text(obj, "蓝牙");
+            add_style_checkbox_style(obj);
+        }
+        {
+            // data_sync_scr_ble_status_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.data_sync_scr_ble_status_label = obj;
+            lv_obj_set_pos(obj, 213, 42);
+            lv_obj_set_size(obj, 171, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "设备未连接");
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 86, 84);
+            lv_obj_set_size(obj, 238, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "当前设备名  FocusTimer");
+        }
+    }
+    
+    tick_screen_data_sync();
+}
+
+void tick_screen_data_sync() {
+}
+
 typedef void (*tick_screen_func_t)();
 tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_start,
@@ -1044,6 +1134,7 @@ tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_pomodoro,
     tick_screen_message,
     tick_screen_power_setting,
+    tick_screen_data_sync,
 };
 void tick_screen(int screen_index) {
     tick_screen_funcs[screen_index]();
@@ -1157,4 +1248,5 @@ void create_screens() {
     create_screen_pomodoro();
     create_screen_message();
     create_screen_power_setting();
+    create_screen_data_sync();
 }
