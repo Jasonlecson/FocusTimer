@@ -6,6 +6,8 @@
 #include "freertos/task.h"
 
 #include "esp_log.h"
+#include "esp_sleep.h"
+#include "driver/gpio.h"
 
 #include "lvgl.h"
 #include "ui.h"
@@ -28,6 +30,7 @@
 #include "power_management.h"
 #include "st7305_2p9.h"
 #include "ble.h"
+#include "pinmap.h"
 
 #define TAG "main"
 
@@ -73,6 +76,10 @@ static void pre_deepsleep_cb(void *user_data)
 
 void app_main(void)
 {
+    esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
+    int touch_level_at_boot = gpio_get_level(TOUCH_INT_PIN);
+    ESP_LOGI(TAG, "boot, wakeup cause=%d, touch_int_level_at_boot=%d", (int)wake_cause, touch_level_at_boot);
+
     ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
@@ -93,6 +100,9 @@ void app_main(void)
     // 屏幕及LVGL相关
     bool wakeup_from_timer = power_management_is_wakeup_from_timer();
     bool wakeup_by_touch = power_management_is_wakeup_by_touch();
+    int touch_int_level = gpio_get_level(TOUCH_INT_PIN);
+    ESP_LOGI(TAG, "wakeup flags: timer=%d, touch=%d, touch_int_level=%d", wakeup_from_timer, wakeup_by_touch, touch_int_level);
+
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
     lvgl_user_init(panel_handle, io_handle);
     power_management_register_panel(panel_handle);
@@ -104,11 +114,39 @@ void app_main(void)
     _lock_release(&lvgl_api_lock);
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
+    /* 如果是触摸唤醒，通常意味着用户要操作。
+       由于 ext1 是电平唤醒，触摸那一下不一定会再产生一次下降沿中断，
+       因此这里主动恢复屏幕到 HPM，避免“已唤醒但界面不刷新/无法操作”的假死观感。 */
+    if (wakeup_by_touch)
+    {
+        power_management_notify_user_activity();
+    }
+
     if (wakeup_from_timer)
     {
+        /* 定时唤醒用于刷新显示：先确保屏幕在 HPM，避免 LPM 下刷新不可见 */
+        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
         (void)main_screen_refresh_once(1200);
-        // 自动从deepsleep唤醒时，更新显示后立即再次进入deepsleep
-        power_management_enter_deepsleep(58000); ///58s后唤醒
+
+        /* 强制执行一次 LVGL 刷新，确保在进入 deep sleep 前已完成 SPI flush */
+        _lock_acquire(&lvgl_api_lock);
+        if (lvgl_display != NULL)
+        {
+            lv_refr_now(lvgl_display);
+        }
+        _lock_release(&lvgl_api_lock);
+        vTaskDelay(pdMS_TO_TICKS(120));
+
+        /* 自动从 deep sleep 唤醒时，更新显示后通常会立即再次进入 deep sleep。
+           但若在本次唤醒点用户正在触摸（INT 线已为低），则保留唤醒态以便操作。 */
+        if (touch_level_at_boot == 0)
+        {
+            ESP_LOGI(TAG, "touch asserted during timer wake, stay awake");
+        }
+        else
+        {
+            power_management_enter_deepsleep(58000); ///58s后唤醒
+        }
     }
     if (!wakeup_from_timer && !wakeup_by_touch)
     {
