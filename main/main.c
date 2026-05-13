@@ -80,17 +80,93 @@ static void ble_datetime_updated_cb(void *user_data)
     update_main_screen_date_labels(true);
 }
 
-void app_main(void)
+static void sync_daily_record_on_midnight_wakeup(void)
 {
-    esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
-    int touch_level_at_boot = gpio_get_level(TOUCH_INT_PIN);
-    ESP_LOGI(TAG, "boot, wakeup cause=%d, touch_int_level_at_boot=%d", (int)wake_cause, touch_level_at_boot);
+    bool is_midnight = false;
+    esp_err_t err = nvs_storage_is_midnight(&is_midnight);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "midnight check failed: %s", esp_err_to_name(err));
+        return;
+    }
 
-    ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
+    if (!is_midnight)
+    {
+        return;
+    }
+
+    err = nvs_storage_sync_current_day();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "midnight rollover sync failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGI(TAG, "midnight wakeup detected, synced previous day record");
+}
+
+static void init_minimal_display_stack(void)
+{
+    spi_shared_lock_init();
+    ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
+    lvgl_user_init(panel_handle, io_handle);
+
+    _lock_acquire(&lvgl_api_lock);
+    create_screens();
+    lv_scr_load(objects.main);
+    _lock_release(&lvgl_api_lock);
+
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+}
+
+static void handle_timer_wakeup(void)
+{
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
-    // ESP_ERROR_CHECK_WITHOUT_ABORT(ble_init());
+    sync_daily_record_on_midnight_wakeup();
+    ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(battery_refresh_once());
+
+    init_minimal_display_stack();
+
+    esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
+    (void)main_screen_refresh_once(1200);
+
+    _lock_acquire(&lvgl_api_lock);
+    if (lvgl_display != NULL)
+    {
+        lv_refr_now(lvgl_display);
+    }
+    _lock_release(&lvgl_api_lock);
+    vTaskDelay(pdMS_TO_TICKS(120));
+
+    esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_LPM);
+    power_management_enter_deepsleep(58000);
+}
+
+void app_main(void)
+{
+    esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
+    ESP_LOGI(TAG, "boot, wakeup cause=%d", (int)wake_cause);
+
+    ESP_ERROR_CHECK_WITHOUT_ABORT(storage_init_nvs_flash());
+    bool wakeup_from_timer = power_management_is_wakeup_from_timer();
+    bool wakeup_by_touch = power_management_is_wakeup_by_touch();
+    
+    if (wakeup_from_timer)
+    {
+        handle_timer_wakeup();
+        return;
+    }
+
+    ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
+    sync_daily_record_on_midnight_wakeup();
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(imu_init(I2C_NUM_0));
@@ -102,12 +178,6 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(sdcard_init(&sd_handle));
     ESP_ERROR_CHECK_WITHOUT_ABORT(audio_init(&audio_handle));
-
-    // 屏幕及LVGL相关
-    bool wakeup_from_timer = power_management_is_wakeup_from_timer();
-    bool wakeup_by_touch = power_management_is_wakeup_by_touch();
-    int touch_int_level = gpio_get_level(TOUCH_INT_PIN);
-    ESP_LOGI(TAG, "wakeup flags: timer=%d, touch=%d, touch_int_level=%d", wakeup_from_timer, wakeup_by_touch, touch_int_level);
 
     ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
     lvgl_user_init(panel_handle, io_handle);
@@ -129,32 +199,6 @@ void app_main(void)
         power_management_notify_user_activity();
     }
 
-    if (wakeup_from_timer)
-    {
-        /* 定时唤醒用于刷新显示：先确保屏幕在 HPM，避免 LPM 下刷新不可见 */
-        esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
-        (void)main_screen_refresh_once(1200);
-
-        /* 强制执行一次 LVGL 刷新，确保在进入 deep sleep 前已完成 SPI flush */
-        _lock_acquire(&lvgl_api_lock);
-        if (lvgl_display != NULL)
-        {
-            lv_refr_now(lvgl_display);
-        }
-        _lock_release(&lvgl_api_lock);
-        vTaskDelay(pdMS_TO_TICKS(120));
-
-        /* 自动从 deep sleep 唤醒时，更新显示后通常会立即再次进入 deep sleep。
-           但若在本次唤醒点用户正在触摸（INT 线已为低），则保留唤醒态以便操作。 */
-        if (touch_level_at_boot == 0)
-        {
-            ESP_LOGI(TAG, "touch asserted during timer wake, stay awake");
-        }
-        else
-        {
-            power_management_enter_deepsleep(58000); ///58s后唤醒
-        }
-    }
     if (!wakeup_from_timer && !wakeup_by_touch)
     {
         esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);

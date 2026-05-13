@@ -37,6 +37,77 @@ static float s_capacity = 0.0f;
 static bool s_is_charging = false;
 static bool s_charge_disabled_by_threshold = false;
 
+static esp_err_t battery_sample_once(void)
+{
+    ESP_RETURN_ON_FALSE(s_battery_handle != NULL, ESP_ERR_INVALID_STATE, TAG, "battery not initialized");
+
+    float capacity = 0.0f;
+    bool is_charging = false;
+
+    /*
+     * 先查询充电状态，如果正在充电则临时关闭充电再测量。
+     * 充电时电池端电压 = OCV + 充电电流×内阻 + 极化电压，
+     * 直接测量会导致电压偏高、电量高估。
+     * 临时关闭充电等待电压回落后再 ADC 采样，可获取接近真实 OCV 的电压。
+     */
+    esp_err_t err_chg = adc_battery_estimation_get_charging_state(s_battery_handle, &is_charging);
+    if (err_chg != ESP_OK)
+    {
+        ESP_LOGW(TAG, "get charging state failed: %s", esp_err_to_name(err_chg));
+    }
+
+    bool charge_was_paused = false;
+    if (is_charging)
+    {
+        aw32001_disable_charge();
+        charge_was_paused = true;
+        vTaskDelay(pdMS_TO_TICKS(BATTERY_CHARGE_PAUSE_MS));
+    }
+
+    esp_err_t err_cap = adc_battery_estimation_get_capacity(s_battery_handle, &capacity);
+    if (err_cap == ESP_OK)
+    {
+        s_capacity = capacity;
+    }
+    else
+    {
+        ESP_LOGW(TAG, "get battery capacity failed: %s", esp_err_to_name(err_cap));
+        return err_cap;
+    }
+
+    /* 充电阈值控制：电量 >= 阈值时停止充电，降到阈值-2%以下才恢复 */
+    if (charge_was_paused)
+    {
+        uint8_t threshold = power_management_get_charge_threshold();
+        if (s_capacity >= (float)threshold)
+        {
+            s_charge_disabled_by_threshold = true;
+            ESP_LOGI(TAG, "capacity %.1f%% >= threshold %d%%, stop charging", s_capacity, threshold);
+        }
+        else
+        {
+            aw32001_enable_charge();
+            s_charge_disabled_by_threshold = false;
+        }
+    }
+    else if (s_charge_disabled_by_threshold)
+    {
+        uint8_t threshold = power_management_get_charge_threshold();
+        float resume_level = (float)threshold - 2.0f;
+        if (s_capacity < resume_level)
+        {
+            aw32001_enable_charge();
+            s_charge_disabled_by_threshold = false;
+            ESP_LOGI(TAG, "capacity %.1f%% < resume level %.1f%%, resume charging", s_capacity, resume_level);
+        }
+    }
+
+    s_is_charging = is_charging;
+
+    ESP_LOGI(TAG, "battery capacity=%.1f%%, charging=%s", s_capacity, s_is_charging ? "true" : "false");
+    return ESP_OK;
+}
+
 static bool battery_charging_detect_cb(void *user_data)
 {
     (void)user_data;
@@ -63,66 +134,7 @@ static void battery_monitor_task(void *arg)
 
     while (1)
     {
-        float capacity = 0.0f;
-        bool is_charging = false;
-
-        /*
-         * 先查询充电状态，如果正在充电则临时关闭充电再测量。
-         * 充电时电池端电压 = OCV + 充电电流×内阻 + 极化电压，
-         * 直接测量会导致电压偏高、电量高估。
-         * 临时关闭充电等待电压回落后再 ADC 采样，可获取接近真实 OCV 的电压。
-         */
-        esp_err_t err_chg = adc_battery_estimation_get_charging_state(s_battery_handle, &is_charging);
-        if (err_chg != ESP_OK)
-        {
-            ESP_LOGW(TAG, "get charging state failed: %s", esp_err_to_name(err_chg));
-        }
-
-        bool charge_was_paused = false;
-        if (is_charging)
-        {
-            aw32001_disable_charge();
-            charge_was_paused = true;
-            vTaskDelay(pdMS_TO_TICKS(BATTERY_CHARGE_PAUSE_MS));
-        }
-
-        esp_err_t err_cap = adc_battery_estimation_get_capacity(s_battery_handle, &capacity);
-
-        if (err_cap == ESP_OK)
-        {
-            s_capacity = capacity;
-        }
-        else
-        {
-            ESP_LOGW(TAG, "get battery capacity failed: %s", esp_err_to_name(err_cap));
-        }
-
-        /* 充电阈值控制：电量 >= 阈值时停止充电，降到阈值-2%以下才恢复 */
-        if (charge_was_paused)
-        {
-            uint8_t threshold = power_management_get_charge_threshold();
-            if (s_capacity >= (float)threshold) {
-                s_charge_disabled_by_threshold = true;
-                ESP_LOGI(TAG, "capacity %.1f%% >= threshold %d%%, stop charging", s_capacity, threshold);
-            } else {
-                aw32001_enable_charge();
-                s_charge_disabled_by_threshold = false;
-            }
-        }
-        else if (s_charge_disabled_by_threshold)
-        {
-            uint8_t threshold = power_management_get_charge_threshold();
-            float resume_level = (float)threshold - 2.0f;
-            if (s_capacity < resume_level) {
-                aw32001_enable_charge();
-                s_charge_disabled_by_threshold = false;
-                ESP_LOGI(TAG, "capacity %.1f%% < resume level %.1f%%, resume charging", s_capacity, resume_level);
-            }
-        }
-
-        s_is_charging = is_charging;
-
-        ESP_LOGI(TAG, "battery capacity=%.1f%%, charging=%s", s_capacity, s_is_charging ? "true" : "false");
+        (void)battery_sample_once();
 
         vTaskDelay(pdMS_TO_TICKS(BATTERY_DETECT_INTERVAL_MS));
     }
@@ -174,6 +186,11 @@ esp_err_t battery_init(void)
 
     ESP_LOGI(TAG, "battery init done");
     return ESP_OK;
+}
+
+esp_err_t battery_refresh_once(void)
+{
+    return battery_sample_once();
 }
 
 float battery_get_capacity(void)
