@@ -68,7 +68,7 @@ static bool ble_inited;
 static bool history_chr_subscribed;
 
 /* Fragmented history send state */
-#define BLE_HISTORY_CHUNK_DATA_SIZE 246 // 246=MTU-ATT header(3)-自定义帧头7
+#define BLE_HISTORY_CHUNK_DATA_SIZE 502 //502=MTU(512)-ATT header(3)-自定义帧头7
 static char *s_history_json_buf;
 static size_t s_history_json_len;
 static int s_history_total_chunks;
