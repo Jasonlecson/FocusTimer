@@ -47,9 +47,15 @@ static const ble_uuid128_t datetime_set_chr_uuid =
     BLE_UUID128_INIT(0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
+/* Characteristic 4 (trigger send history): 00000000-0000-0000-0000-0000-0000-0004 */
+static const ble_uuid128_t send_history_chr_uuid =
+    BLE_UUID128_INIT(0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+
 static uint16_t current_day_chr_val_handle;
 static uint16_t history_chr_val_handle;
 static uint16_t datetime_set_chr_val_handle;
+static uint16_t send_history_chr_val_handle;
 
 static bool ble_connected;
 static uint16_t ble_conn_handle;
@@ -57,6 +63,16 @@ static uint8_t own_addr_type;
 static bool ble_synced;
 static bool ble_adv_enabled;
 static bool ble_inited;
+
+/* History notification subscription state */
+static bool history_chr_subscribed;
+
+/* Fragmented history send state */
+#define BLE_HISTORY_CHUNK_DATA_SIZE 246 // 246=MTU-ATT header(3)-自定义帧头7
+static char *s_history_json_buf;
+static size_t s_history_json_len;
+static int s_history_total_chunks;
+static int s_history_current_chunk;
 
 static ble_connection_state_cb_t s_conn_state_cb;
 static void *s_conn_state_cb_arg;
@@ -116,6 +132,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg);
 static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                           struct ble_gatt_access_ctxt *ctxt, void *arg);
 static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt);
+static int ble_handle_send_history_write(struct ble_gatt_access_ctxt *ctxt);
 static esp_err_t ble_parse_datetime_json(const char *json, pcf85263a_datetime_t *datetime);
 void ble_store_config_init(void);
 
@@ -236,6 +253,103 @@ static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt)
     return 0;
 }
 
+/*** Fragmented history data send via notifications ***/
+
+static void ble_send_history_fragments(void)
+{
+    if (!ble_connected || !history_chr_subscribed) {
+        ESP_LOGW(TAG, "Cannot send history: not connected or not subscribed");
+        free(s_history_json_buf);
+        s_history_json_buf = NULL;
+        return;
+    }
+
+    if (s_history_json_len == 0) {
+        ESP_LOGW(TAG, "History JSON is empty, nothing to send");
+        free(s_history_json_buf);
+        s_history_json_buf = NULL;
+        return;
+    }
+
+    s_history_total_chunks = (int)((s_history_json_len + BLE_HISTORY_CHUNK_DATA_SIZE - 1) / BLE_HISTORY_CHUNK_DATA_SIZE);
+    s_history_current_chunk = 0;
+
+    ESP_LOGI(TAG, "Sending history: %zu bytes, %d chunks", s_history_json_len, s_history_total_chunks);
+
+    for (int i = 0; i < s_history_total_chunks; i++) {
+        size_t offset = (size_t)i * BLE_HISTORY_CHUNK_DATA_SIZE;
+        size_t chunk_data_len = s_history_json_len - offset;
+        if (chunk_data_len > BLE_HISTORY_CHUNK_DATA_SIZE) {
+            chunk_data_len = BLE_HISTORY_CHUNK_DATA_SIZE;
+        }
+
+        /* Frame format: "(n/m)xxx" — n and m are 1-based */
+        int frame_len = snprintf(NULL, 0, "(%02d/%02d)", i + 1, s_history_total_chunks);
+        size_t total_len = (size_t)frame_len + chunk_data_len;
+
+        char *frame_buf = malloc(total_len);
+        if (frame_buf == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate frame buffer for chunk %d", i + 1);
+            break;
+        }
+        snprintf(frame_buf, (size_t)frame_len + 1, "(%02d/%02d)", i + 1, s_history_total_chunks);
+        memcpy(frame_buf + frame_len, s_history_json_buf + offset, chunk_data_len);
+
+        struct os_mbuf *om = ble_hs_mbuf_from_flat(frame_buf, total_len);
+        if (om == NULL) {
+            ESP_LOGE(TAG, "Failed to create mbuf for chunk %d", i + 1);
+            free(frame_buf);
+            break;
+        }
+        int rc = ble_gatts_notify_custom(ble_conn_handle, history_chr_val_handle, om);
+        free(frame_buf);
+        if (rc != 0) {
+            ESP_LOGE(TAG, "Failed to notify chunk %d/%d: %d", i + 1, s_history_total_chunks, rc);
+            break;
+        }
+        s_history_current_chunk = i + 1;
+    }
+
+    ESP_LOGI(TAG, "History send complete: %d/%d chunks sent", s_history_current_chunk, s_history_total_chunks);
+    free(s_history_json_buf);
+    s_history_json_buf = NULL;
+    s_history_json_len = 0;
+}
+
+static int ble_handle_send_history_write(struct ble_gatt_access_ctxt *ctxt)
+{
+    if (!ble_connected) {
+        ESP_LOGW(TAG, "Cannot send history: not connected");
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    if (!history_chr_subscribed) {
+        ESP_LOGW(TAG, "Cannot send history: APP not subscribed to history characteristic");
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    /* Free any previous incomplete transfer */
+    free(s_history_json_buf);
+    s_history_json_buf = NULL;
+
+    s_history_json_buf = malloc(4096);
+    if (s_history_json_buf == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate history JSON buffer");
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+
+    esp_err_t err = nvs_storage_get_records_json(s_history_json_buf, 4096, &s_history_json_len);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get records JSON: %s", esp_err_to_name(err));
+        free(s_history_json_buf);
+        s_history_json_buf = NULL;
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    ble_send_history_fragments();
+    return 0;
+}
+
 /*** GATT service definition ***/
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     {
@@ -249,10 +363,10 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .flags = BLE_GATT_CHR_F_READ,
                 .val_handle = &current_day_chr_val_handle,
             }, {
-                /* History records JSON */
+                /* History records JSON (notify for fragmented transfer) */
                 .uuid = &history_chr_uuid.u,
                 .access_cb = gatt_access_cb,
-                .flags = BLE_GATT_CHR_F_READ,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
                 .val_handle = &history_chr_val_handle,
             }, {
                 /* Set RTC datetime JSON */
@@ -260,6 +374,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .access_cb = gatt_access_cb,
                 .flags = BLE_GATT_CHR_F_WRITE,
                 .val_handle = &datetime_set_chr_val_handle,
+            }, {
+                /* Trigger send history (write any data to start fragmented transfer) */
+                .uuid = &send_history_chr_uuid.u,
+                .access_cb = gatt_access_cb,
+                .flags = BLE_GATT_CHR_F_WRITE,
+                .val_handle = &send_history_chr_val_handle,
             }, {
                 0, /* Terminator */
             },
@@ -293,6 +413,7 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
         }
 
         if (attr_handle == history_chr_val_handle) {
+            /* Read returns current JSON (small enough to fit in one read) */
             char *json_buf = malloc(2048);
             if (json_buf == NULL) {
                 ESP_LOGE(TAG, "Failed to allocate JSON buffer");
@@ -317,6 +438,10 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 
         if (attr_handle == datetime_set_chr_val_handle) {
             return ble_handle_datetime_write(ctxt);
+        }
+
+        if (attr_handle == send_history_chr_val_handle) {
+            return ble_handle_send_history_write(ctxt);
         }
         break;
 
@@ -352,6 +477,11 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
         ESP_LOGD(TAG, "BLE_GAP_EVENT_DISCONNECT; reason=%d",
                  event->disconnect.reason);
         ble_connected = false;
+        history_chr_subscribed = false;
+        if (s_history_json_buf) {
+            free(s_history_json_buf);
+            s_history_json_buf = NULL;
+        }
         ble_notify_conn_state(false);
         if (ble_adv_enabled) {
             ble_start_advertising();
@@ -366,6 +496,17 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_MTU:
         ESP_LOGD(TAG, "MTU update: conn_handle=%d mtu=%d",
                  event->mtu.conn_handle, event->mtu.value);
+        break;
+
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        ESP_LOGD(TAG, "Subscribe event: attr_handle=%d cur_notify=%d",
+                 event->subscribe.attr_handle,
+                 event->subscribe.cur_notify);
+        if (event->subscribe.attr_handle == history_chr_val_handle) {
+            history_chr_subscribed = event->subscribe.cur_notify;
+            ESP_LOGI(TAG, "History characteristic %s",
+                     history_chr_subscribed ? "subscribed" : "unsubscribed");
+        }
         break;
 
     default:
