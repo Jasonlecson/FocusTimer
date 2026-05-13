@@ -82,6 +82,10 @@ typedef struct _objects_t {
     lv_obj_t *power_setting_scr_auto_sleep_checkbox;
     lv_obj_t *power_setting_scr_charge_limit_slider;
     lv_obj_t *power_setting_scr_charge_limit_label;
+    lv_obj_t *power_setting_scr_start_hour_btn;
+    lv_obj_t *power_setting_scr_start_minute_btn;
+    lv_obj_t *power_setting_scr_end_hour_btn;
+    lv_obj_t *power_setting_scr_end_minute_btn;
     lv_obj_t *data_sync_back_to_main_btn;
     lv_obj_t *data_sync_scr_ble_checkbox;
     lv_obj_t *data_sync_scr_ble_status_label;
