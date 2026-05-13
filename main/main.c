@@ -26,6 +26,7 @@
 #include "message_screen_calls.h"
 #include "main_screen_calls.h"
 #include "nvs_storage.h"
+#include "nvs.h"
 #include "nvs_flash.h"
 #include "power_management.h"
 #include "st7305_2p9.h"
@@ -33,6 +34,177 @@
 #include "pinmap.h"
 
 #define TAG "main"
+#define POWER_MGMT_NVS_NAMESPACE "power_mgr"
+#define NVS_KEY_SLEEP_START_HOUR "pm_sleep_sh"
+#define NVS_KEY_SLEEP_START_MINUTE "pm_sleep_sm"
+#define NVS_KEY_SLEEP_END_HOUR "pm_sleep_eh"
+#define NVS_KEY_SLEEP_END_MINUTE "pm_sleep_em"
+#define DEFAULT_SLEEP_START_HOUR 22
+#define DEFAULT_SLEEP_START_MINUTE 0
+#define DEFAULT_SLEEP_END_HOUR 6
+#define DEFAULT_SLEEP_END_MINUTE 0
+#define SECONDS_PER_DAY (24U * 60U * 60U)
+
+static void sync_daily_record_on_midnight_wakeup(void);
+typedef struct
+{
+    uint8_t start_hour;
+    uint8_t start_minute;
+    uint8_t end_hour;
+    uint8_t end_minute;
+} power_sleep_period_t;
+
+static uint8_t nvs_read_u8_default(const char *key, uint8_t default_val)
+{
+    nvs_handle_t handle;
+    uint8_t value = default_val;
+
+    if (nvs_open(POWER_MGMT_NVS_NAMESPACE, NVS_READONLY, &handle) == ESP_OK)
+    {
+        if (nvs_get_u8(handle, key, &value) != ESP_OK)
+        {
+            value = default_val;
+        }
+        nvs_close(handle);
+    }
+
+    return value;
+}
+
+static void load_power_sleep_period(power_sleep_period_t *period)
+{
+    if (period == NULL)
+    {
+        return;
+    }
+
+    period->start_hour = nvs_read_u8_default(NVS_KEY_SLEEP_START_HOUR, DEFAULT_SLEEP_START_HOUR);
+    period->start_minute = nvs_read_u8_default(NVS_KEY_SLEEP_START_MINUTE, DEFAULT_SLEEP_START_MINUTE);
+    period->end_hour = nvs_read_u8_default(NVS_KEY_SLEEP_END_HOUR, DEFAULT_SLEEP_END_HOUR);
+    period->end_minute = nvs_read_u8_default(NVS_KEY_SLEEP_END_MINUTE, DEFAULT_SLEEP_END_MINUTE);
+
+    if (period->start_hour > 23)
+    {
+        period->start_hour = 0;
+    }
+    if (period->start_minute > 59)
+    {
+        period->start_minute = 0;
+    }
+    if (period->end_hour > 23)
+    {
+        period->end_hour = 0;
+    }
+    if (period->end_minute > 59)
+    {
+        period->end_minute = 0;
+    }
+}
+
+static bool get_sleep_period_remaining_ms(const power_sleep_period_t *period,
+                                          const pcf85263a_datetime_t *datetime,
+                                          uint32_t *out_remaining_ms)
+{
+    if (period == NULL || datetime == NULL || out_remaining_ms == NULL)
+    {
+        return false;
+    }
+
+    uint32_t start_seconds = ((uint32_t)period->start_hour * 60U + (uint32_t)period->start_minute) * 60U;
+    uint32_t end_seconds = ((uint32_t)period->end_hour * 60U + (uint32_t)period->end_minute) * 60U;
+    uint32_t now_seconds = ((uint32_t)datetime->hour * 60U + (uint32_t)datetime->minute) * 60U + (uint32_t)datetime->second;
+    uint32_t remaining_seconds = 0;
+
+    if (start_seconds == end_seconds)
+    {
+        return false;
+    }
+
+    if (start_seconds < end_seconds)
+    {
+        if (now_seconds < start_seconds || now_seconds >= end_seconds)
+        {
+            return false;
+        }
+        remaining_seconds = end_seconds - now_seconds;
+    }
+    else
+    {
+        if (now_seconds >= start_seconds)
+        {
+            remaining_seconds = (SECONDS_PER_DAY - now_seconds) + end_seconds;
+        }
+        else if (now_seconds < end_seconds)
+        {
+            remaining_seconds = end_seconds - now_seconds;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    if (remaining_seconds == 0)
+    {
+        return false;
+    }
+
+    *out_remaining_ms = remaining_seconds * 1000U;
+    return true;
+}
+
+static bool maybe_enter_configured_sleep_period(void)
+{
+    power_sleep_period_t period = {0};
+    pcf85263a_datetime_t datetime = {0};
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+    uint32_t sleep_ms = 0;
+
+    if (rtc_handle == NULL)
+    {
+        ESP_LOGW(TAG, "rtc handle unavailable when checking sleep period");
+        return false;
+    }
+
+    load_power_sleep_period(&period);
+
+    esp_err_t err = pcf85263a_get_datetime(rtc_handle, &datetime);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "read rtc datetime for sleep period failed: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    if (!get_sleep_period_remaining_ms(&period, &datetime, &sleep_ms))
+    {
+        return false;
+    }
+
+    err = nvs_storage_save_daily_record();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "save daily record before configured sleep failed: %s", esp_err_to_name(err));
+    }
+
+    ESP_LOGI(TAG,
+             "in configured sleep period %02u:%02u-%02u:%02u, now=%02u:%02u:%02u, deep sleep %lu ms",
+             period.start_hour,
+             period.start_minute,
+             period.end_hour,
+             period.end_minute,
+             datetime.hour,
+             datetime.minute,
+             datetime.second,
+             (unsigned long)sleep_ms);
+
+    spi_shared_lock_init();
+    ESP_ERROR_CHECK_WITHOUT_ABORT(spi_bus_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(lcd_screen_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_lcd_panel_disp_on_off(panel_handle, false));
+    sync_daily_record_on_midnight_wakeup();
+    power_management_enter_deepsleep(sleep_ms);
+    return true;
+}
 
 static esp_err_t storage_init_nvs_flash(void)
 {
@@ -125,11 +297,15 @@ static void handle_timer_wakeup(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
-    sync_daily_record_on_midnight_wakeup();
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_refresh_once());
+
+    if (maybe_enter_configured_sleep_period())
+    {
+        return;
+    }
 
     init_minimal_display_stack();
 
