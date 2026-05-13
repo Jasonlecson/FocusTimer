@@ -29,7 +29,7 @@
 #define DEFAULT_CHG_THRESHOLD 90
 
 /* ---- 空闲超时 ---- */
-#define SCREEN_LPM_TIMEOUT_SEC (1)
+#define SCREEN_LPM_TIMEOUT_SEC (2)
 #define DEEPSLEEP_IDLE_TIMEOUT_SEC (5 * 60)
 
 /* ---- 频率配置 ---- */
