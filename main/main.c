@@ -80,6 +80,31 @@ static void ble_datetime_updated_cb(void *user_data)
     update_main_screen_date_labels(true);
 }
 
+static void sync_daily_record_on_midnight_wakeup(void)
+{
+    bool is_midnight = false;
+    esp_err_t err = nvs_storage_is_midnight(&is_midnight);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "midnight check failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    if (!is_midnight)
+    {
+        return;
+    }
+
+    err = nvs_storage_sync_current_day();
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "midnight rollover sync failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGI(TAG, "midnight wakeup detected, synced previous day record");
+}
+
 void app_main(void)
 {
     esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
@@ -90,7 +115,7 @@ void app_main(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
-    // ESP_ERROR_CHECK_WITHOUT_ABORT(ble_init());
+    sync_daily_record_on_midnight_wakeup();
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw96103_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(imu_init(I2C_NUM_0));

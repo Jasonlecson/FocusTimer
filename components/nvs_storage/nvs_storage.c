@@ -92,6 +92,33 @@ static esp_err_t nvs_storage_get_current_date_string(char *date_buffer, size_t b
     return ESP_OK;
 }
 
+esp_err_t nvs_storage_is_midnight(bool *is_midnight)
+{
+    pcf85263a_handle_t rtc_handle = pcf85263a_get_handle();
+    pcf85263a_datetime_t datetime = {0};
+
+    if (is_midnight == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (rtc_handle == NULL)
+    {
+        ESP_LOGE(TAG, "rtc handle unavailable");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    esp_err_t err = pcf85263a_get_datetime(rtc_handle, &datetime);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "read rtc datetime failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    *is_midnight = (datetime.hour == 0U) && (datetime.minute == 0U);
+    return ESP_OK;
+}
+
 static esp_err_t nvs_storage_load_records_json_alloc(char **out_json)
 {
     nvs_handle_t nvs_handle;
