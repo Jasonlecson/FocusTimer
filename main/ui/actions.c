@@ -278,6 +278,11 @@ void action_power_setting_scr(lv_event_t *e)
     handle_power_setting_scr_event(e);
 }
 
+void action_power_setting_scr_time_btn(lv_event_t *e)
+{
+    handle_power_setting_scr_time_btn_event(e);
+}
+
 void action_submain_scr_enter_data_sync_scr(lv_event_t *e)
 {
     lv_event_code_t code = lv_event_get_code(e);
