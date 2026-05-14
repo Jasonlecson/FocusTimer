@@ -96,8 +96,9 @@ lv_style_t *get_style_checkbox_style_MAIN_DEFAULT() {
 };
 
 void init_style_checkbox_style_MAIN_FOCUS_KEY(lv_style_t *style) {
-    lv_style_set_outline_color(style, lv_color_hex(0xffffffff));
-    lv_style_set_outline_width(style, 1);
+    lv_style_set_outline_width(style, 2);
+    lv_style_set_outline_color(style, lv_color_hex(0xff000000));
+    lv_style_set_outline_pad(style, 2);
     lv_style_set_outline_opa(style, 255);
 };
 
@@ -142,17 +143,16 @@ lv_style_t *get_style_checkbox_style_INDICATOR_CHECKED() {
     return style;
 };
 
-void init_style_checkbox_style_INDICATOR_FOCUSED(lv_style_t *style) {
+void init_style_checkbox_style_INDICATOR_FOCUS_KEY(lv_style_t *style) {
     lv_style_set_border_color(style, lv_color_hex(0xff000000));
-    lv_style_set_border_width(style, 4);
 };
 
-lv_style_t *get_style_checkbox_style_INDICATOR_FOCUSED() {
+lv_style_t *get_style_checkbox_style_INDICATOR_FOCUS_KEY() {
     static lv_style_t *style;
     if (!style) {
         style = (lv_style_t *)lv_malloc(sizeof(lv_style_t));
         lv_style_init(style);
-        init_style_checkbox_style_INDICATOR_FOCUSED(style);
+        init_style_checkbox_style_INDICATOR_FOCUS_KEY(style);
     }
     return style;
 };
@@ -163,7 +163,7 @@ void add_style_checkbox_style(lv_obj_t *obj) {
     lv_obj_add_style(obj, get_style_checkbox_style_MAIN_FOCUS_KEY(), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
     lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_DEFAULT(), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_CHECKED(), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_FOCUSED(), LV_PART_INDICATOR | LV_STATE_FOCUSED);
+    lv_obj_add_style(obj, get_style_checkbox_style_INDICATOR_FOCUS_KEY(), LV_PART_INDICATOR | LV_STATE_FOCUS_KEY);
 };
 
 void remove_style_checkbox_style(lv_obj_t *obj) {
@@ -172,7 +172,7 @@ void remove_style_checkbox_style(lv_obj_t *obj) {
     lv_obj_remove_style(obj, get_style_checkbox_style_MAIN_FOCUS_KEY(), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
     lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_DEFAULT(), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_CHECKED(), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_FOCUSED(), LV_PART_INDICATOR | LV_STATE_FOCUSED);
+    lv_obj_remove_style(obj, get_style_checkbox_style_INDICATOR_FOCUS_KEY(), LV_PART_INDICATOR | LV_STATE_FOCUS_KEY);
 };
 
 //
@@ -279,16 +279,36 @@ lv_style_t *get_style_progress_bar_style_MAIN_DEFAULT() {
     return style;
 };
 
-void init_style_progress_bar_style_MAIN_FOCUSED(lv_style_t *style) {
-    lv_style_set_border_width(style, 2);
+void init_style_progress_bar_style_MAIN_FOCUS_KEY(lv_style_t *style) {
+    lv_style_set_outline_width(style, 2);
+    lv_style_set_outline_color(style, lv_color_hex(0xff000000));
+    lv_style_set_outline_pad(style, 2);
+    lv_style_set_outline_opa(style, 255);
 };
 
-lv_style_t *get_style_progress_bar_style_MAIN_FOCUSED() {
+lv_style_t *get_style_progress_bar_style_MAIN_FOCUS_KEY() {
     static lv_style_t *style;
     if (!style) {
         style = (lv_style_t *)lv_malloc(sizeof(lv_style_t));
         lv_style_init(style);
-        init_style_progress_bar_style_MAIN_FOCUSED(style);
+        init_style_progress_bar_style_MAIN_FOCUS_KEY(style);
+    }
+    return style;
+};
+
+void init_style_progress_bar_style_MAIN_EDITED(lv_style_t *style) {
+    lv_style_set_outline_width(style, 1);
+    lv_style_set_outline_color(style, lv_color_hex(0xff000000));
+    lv_style_set_outline_opa(style, 255);
+    lv_style_set_outline_pad(style, 1);
+};
+
+lv_style_t *get_style_progress_bar_style_MAIN_EDITED() {
+    static lv_style_t *style;
+    if (!style) {
+        style = (lv_style_t *)lv_malloc(sizeof(lv_style_t));
+        lv_style_init(style);
+        init_style_progress_bar_style_MAIN_EDITED(style);
     }
     return style;
 };
@@ -324,7 +344,8 @@ lv_style_t *get_style_progress_bar_style_KNOB_DEFAULT() {
 void add_style_progress_bar_style(lv_obj_t *obj) {
     (void)obj;
     lv_obj_add_style(obj, get_style_progress_bar_style_MAIN_DEFAULT(), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_add_style(obj, get_style_progress_bar_style_MAIN_FOCUSED(), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(obj, get_style_progress_bar_style_MAIN_FOCUS_KEY(), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
+    lv_obj_add_style(obj, get_style_progress_bar_style_MAIN_EDITED(), LV_PART_MAIN | LV_STATE_EDITED);
     lv_obj_add_style(obj, get_style_progress_bar_style_INDICATOR_DEFAULT(), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_add_style(obj, get_style_progress_bar_style_KNOB_DEFAULT(), LV_PART_KNOB | LV_STATE_DEFAULT);
 };
@@ -332,7 +353,8 @@ void add_style_progress_bar_style(lv_obj_t *obj) {
 void remove_style_progress_bar_style(lv_obj_t *obj) {
     (void)obj;
     lv_obj_remove_style(obj, get_style_progress_bar_style_MAIN_DEFAULT(), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_remove_style(obj, get_style_progress_bar_style_MAIN_FOCUSED(), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_remove_style(obj, get_style_progress_bar_style_MAIN_FOCUS_KEY(), LV_PART_MAIN | LV_STATE_FOCUS_KEY);
+    lv_obj_remove_style(obj, get_style_progress_bar_style_MAIN_EDITED(), LV_PART_MAIN | LV_STATE_EDITED);
     lv_obj_remove_style(obj, get_style_progress_bar_style_INDICATOR_DEFAULT(), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_remove_style(obj, get_style_progress_bar_style_KNOB_DEFAULT(), LV_PART_KNOB | LV_STATE_DEFAULT);
 };

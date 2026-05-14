@@ -158,6 +158,10 @@ void action_pomodoro_scr(lv_event_t *e)
     {
         pomodoro_screen_start_update_task();
     }
+    if (code == LV_EVENT_SCREEN_UNLOAD_START)
+    {
+        pomodoro_screen_stop_update_task();
+    }
 }
 
 void action_message_scr_btn(lv_event_t *e)
@@ -276,6 +280,11 @@ void action_power_setting_scr_charge_limit_slider(lv_event_t *e)
 void action_power_setting_scr(lv_event_t *e)
 {
     handle_power_setting_scr_event(e);
+}
+
+void action_power_setting_scr_time_btn(lv_event_t *e)
+{
+    handle_power_setting_scr_time_btn_event(e);
 }
 
 void action_submain_scr_enter_data_sync_scr(lv_event_t *e)

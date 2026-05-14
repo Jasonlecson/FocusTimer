@@ -29,7 +29,7 @@
 #define DEFAULT_CHG_THRESHOLD 90
 
 /* ---- 空闲超时 ---- */
-#define SCREEN_LPM_TIMEOUT_SEC (1)
+#define SCREEN_LPM_TIMEOUT_SEC (2)
 #define DEEPSLEEP_IDLE_TIMEOUT_SEC (5 * 60)
 
 /* ---- 频率配置 ---- */
@@ -336,7 +336,7 @@ esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t 
     return ESP_OK;
 }
 
-void power_management_enter_deepsleep(uint16_t wakeup_time_ms)
+void power_management_enter_deepsleep(uint32_t wakeup_time_ms)
 {
     /* 停止空闲计时器，避免 deep sleep 期间触发 */
     power_management_stop_idle_timer();
@@ -362,8 +362,8 @@ void power_management_enter_deepsleep(uint16_t wakeup_time_ms)
         ESP_LOGE(TAG, "enable ext1 wakeup failed (GPIO%d): %s", TOUCH_INT_PIN, esp_err_to_name(err));
     }
 
-    ESP_LOGI(TAG, "entering deep sleep, wakeup: timer %u ms + ext1 GPIO%d low",
-             wakeup_time_ms, TOUCH_INT_PIN);
+    ESP_LOGI(TAG, "entering deep sleep, wakeup: timer %lu ms + ext1 GPIO%d low",
+             (unsigned long)wakeup_time_ms, TOUCH_INT_PIN);
     esp_deep_sleep_start();
     /* 不会执行到这里 */
 }

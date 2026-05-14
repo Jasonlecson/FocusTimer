@@ -6,6 +6,7 @@
 
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 
 #include "max98357.h"
 #include "lvgl_user.h"
@@ -33,11 +34,14 @@ typedef enum
 } pomodoro_state_t;
 
 // 全局变量
-static pomodoro_state_t s_pomodoro_state = POMODORO_STATE_FOCUS;
-static bool s_is_paused = true;
-static uint16_t s_remaining_seconds = 25 * 60; // 默认25分钟
-static uint8_t s_focus_count = 0;
-static uint8_t s_nap_count = 0;
+static RTC_FAST_ATTR pomodoro_state_t s_pomodoro_state = POMODORO_STATE_FOCUS;
+static RTC_FAST_ATTR bool s_is_paused = true;
+static RTC_FAST_ATTR uint16_t s_remaining_seconds = 25 * 60; // 默认25分钟
+static RTC_FAST_ATTR uint8_t s_focus_count = 0;
+static RTC_FAST_ATTR uint8_t s_nap_count = 0;
+static RTC_FAST_ATTR uint16_t s_focus_minutes = 0;
+static RTC_FAST_ATTR uint16_t s_rest_minutes = 0;
+static RTC_FAST_ATTR char s_rtc_date[11] = {0}; // 保存 deep sleep 时的日期，格式 "YYYY-MM-DD\0"
 static bool s_waiting_transition_confirm = false;
 static bool s_timeout_message_pending = false;
 
@@ -71,6 +75,50 @@ static uint16_t pomodoro_get_elapsed_minutes_for_state(pomodoro_state_t state, u
 
 static bool pomodoro_sync_counts_from_storage(void)
 {
+    // deep sleep 唤醒时，RTC_FAST_ATTR 变量已保留最新值，
+    // 需要将 RTC 值同步回 NVS 模块 RAM 状态，而非用 NVS 旧值覆盖 RTC 值
+    if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED)
+    {
+        // 检查是否跨日：NVS 当前追踪的日期 vs RTC 保存的日期
+        char nvs_date[11] = {0};
+        esp_err_t err = nvs_storage_get_tracked_date(nvs_date, sizeof(nvs_date));
+        if (err == ESP_OK && s_rtc_date[0] != '\0' && strcmp(nvs_date, s_rtc_date) != 0)
+        {
+            // 跨日了，NVS 已保存旧日数据并 reset，RTC 变量也需 reset
+            ESP_LOGI(TAG, "day changed during sleep: %s -> %s, resetting RTC counters", s_rtc_date, nvs_date);
+            portENTER_CRITICAL(&s_pomodoro_lock);
+            s_focus_count = 0;
+            s_nap_count = 0;
+            s_focus_minutes = 0;
+            s_rest_minutes = 0;
+            portEXIT_CRITICAL(&s_pomodoro_lock);
+        }
+        else
+        {
+            // 同日，将 RTC 值同步回 NVS RAM 状态
+            err = nvs_storage_set_daily_counts(s_focus_count, s_nap_count);
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "sync RTC counts to NVS failed: %s", esp_err_to_name(err));
+            }
+            err = nvs_storage_set_daily_minutes(s_focus_minutes, s_rest_minutes);
+            if (err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "sync RTC minutes to NVS failed: %s", esp_err_to_name(err));
+            }
+        }
+
+        // 更新 RTC 保存的日期为当前日期
+        if (err == ESP_OK)
+        {
+            portENTER_CRITICAL(&s_pomodoro_lock);
+            memcpy(s_rtc_date, nvs_date, sizeof(s_rtc_date));
+            portEXIT_CRITICAL(&s_pomodoro_lock);
+        }
+        return false;
+    }
+
+    // 冷启动，从 NVS 加载到 RTC 变量
     nvs_storage_daily_totals_t totals = {0};
     bool counts_changed = false;
     esp_err_t err = nvs_storage_get_daily_totals(&totals);
@@ -85,7 +133,19 @@ static bool pomodoro_sync_counts_from_storage(void)
     counts_changed = (s_focus_count != totals.focus_count) || (s_nap_count != totals.nap_count);
     s_focus_count = totals.focus_count;
     s_nap_count = totals.nap_count;
+    s_focus_minutes = totals.focus_minutes;
+    s_rest_minutes = totals.rest_minutes;
     portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    // 冷启动时也保存当前日期到 RTC，为后续 deep sleep 做准备
+    char nvs_date[11] = {0};
+    err = nvs_storage_get_tracked_date(nvs_date, sizeof(nvs_date));
+    if (err == ESP_OK)
+    {
+        portENTER_CRITICAL(&s_pomodoro_lock);
+        memcpy(s_rtc_date, nvs_date, sizeof(s_rtc_date));
+        portEXIT_CRITICAL(&s_pomodoro_lock);
+    }
 
     return counts_changed;
 }
@@ -124,6 +184,7 @@ static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_sta
             }
         }
 
+        s_focus_minutes += elapsed_minutes;
         err = nvs_storage_accumulate_focus_minutes(elapsed_minutes);
         if (err != ESP_OK)
         {
@@ -142,6 +203,7 @@ static void pomodoro_record_stage_progress_locked(pomodoro_state_t completed_sta
             }
         }
 
+        s_rest_minutes += elapsed_minutes;
         err = nvs_storage_accumulate_rest_minutes(elapsed_minutes);
         if (err != ESP_OK)
         {

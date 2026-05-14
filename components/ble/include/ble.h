@@ -40,6 +40,7 @@ bool ble_is_advertising_enabled(void);
 
 typedef void (*ble_connection_state_cb_t)(bool connected, void *arg);
 typedef void (*ble_datetime_updated_cb_t)(void *arg);
+typedef void (*ble_power_settings_updated_cb_t)(void *arg);
 
 /**
  * @brief Register a connection state callback.
@@ -54,6 +55,13 @@ void ble_register_connection_state_cb(ble_connection_state_cb_t cb, void *arg);
  * Only a single callback is supported; calling again replaces the previous one.
  */
 void ble_register_datetime_updated_cb(ble_datetime_updated_cb_t cb, void *arg);
+
+/**
+ * @brief Register a callback invoked after BLE successfully updates power settings.
+ *
+ * Only a single callback is supported; calling again replaces the previous one.
+ */
+void ble_register_power_settings_updated_cb(ble_power_settings_updated_cb_t cb, void *arg);
 
 /**
  * @brief Check if a BLE central is currently connected.

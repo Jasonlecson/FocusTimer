@@ -30,6 +30,9 @@ esp_err_t nvs_storage_increment_focus_count(void);
 esp_err_t nvs_storage_increment_nap_count(void);
 esp_err_t nvs_storage_reset_daily_counters(void);
 esp_err_t nvs_storage_get_daily_totals(nvs_storage_daily_totals_t *totals);
+esp_err_t nvs_storage_get_tracked_date(char *date_buffer, size_t buffer_size);
+esp_err_t nvs_storage_set_daily_counts(uint8_t focus_count, uint8_t nap_count);
+esp_err_t nvs_storage_set_daily_minutes(uint16_t focus_minutes, uint16_t rest_minutes);
 
 #ifdef __cplusplus
 }

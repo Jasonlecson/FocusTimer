@@ -1045,6 +1045,126 @@ void create_screen_power_setting() {
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_label_set_text(obj, "80%");
         }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 25, 119);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "休眠关屏时段");
+        }
+        {
+            // power_setting_scr_start_hour_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.power_setting_scr_start_hour_btn = obj;
+            lv_obj_set_pos(obj, 152, 118);
+            lv_obj_set_size(obj, 39, 26);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_CLICKED, (void *)0);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_DEFOCUSED, (void *)0);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_KEY, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 0, 1);
+                    lv_obj_set_size(obj, 37, 24);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "22");
+                }
+            }
+        }
+        {
+            // power_setting_scr_start_minute_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.power_setting_scr_start_minute_btn = obj;
+            lv_obj_set_pos(obj, 202, 118);
+            lv_obj_set_size(obj, 39, 26);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_CLICKED, (void *)1);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_DEFOCUSED, (void *)1);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_KEY, (void *)1);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 0, 1);
+                    lv_obj_set_size(obj, 37, 24);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "00");
+                }
+            }
+        }
+        {
+            // power_setting_scr_end_hour_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.power_setting_scr_end_hour_btn = obj;
+            lv_obj_set_pos(obj, 266, 118);
+            lv_obj_set_size(obj, 39, 26);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_CLICKED, (void *)2);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_DEFOCUSED, (void *)2);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_KEY, (void *)2);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 1, 1);
+                    lv_obj_set_size(obj, 37, 24);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "06");
+                }
+            }
+        }
+        {
+            // power_setting_scr_end_minute_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.power_setting_scr_end_minute_btn = obj;
+            lv_obj_set_pos(obj, 316, 118);
+            lv_obj_set_size(obj, 39, 26);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_CLICKED, (void *)3);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_DEFOCUSED, (void *)3);
+            lv_obj_add_event_cb(obj, action_power_setting_scr_time_btn, LV_EVENT_KEY, (void *)3);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 0, 1);
+                    lv_obj_set_size(obj, 37, 24);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "00");
+                }
+            }
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 246, 119);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "--");
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 194, 119);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, ":");
+        }
+        {
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            lv_obj_set_pos(obj, 308, 120);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, ":");
+        }
     }
     
     tick_screen_power_setting();
