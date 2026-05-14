@@ -26,6 +26,7 @@
 #include "battery.h"
 #include "message_screen_calls.h"
 #include "main_screen_calls.h"
+#include "power_setting_screen_calls.h"
 #include "nvs_storage.h"
 #include "power_management.h"
 #include "st7305_2p9.h"
@@ -244,6 +245,15 @@ static void ble_datetime_updated_cb(void *user_data)
     update_main_screen_date_labels(true);
 }
 
+static void ble_power_settings_updated_cb(void *user_data)
+{
+    (void)user_data;
+
+    _lock_acquire(&lvgl_api_lock);
+    power_setting_screen_reload_from_storage();
+    _lock_release(&lvgl_api_lock);
+}
+
 /* ==================== 最小显示栈 ==================== */
 
 static void init_minimal_display_stack(void)
@@ -345,4 +355,9 @@ void sleep_register_shipping_mode_cb(void)
 void sleep_register_ble_datetime_cb(void)
 {
     ble_register_datetime_updated_cb(ble_datetime_updated_cb, NULL);
+}
+
+void sleep_register_ble_power_settings_cb(void)
+{
+    ble_register_power_settings_updated_cb(ble_power_settings_updated_cb, NULL);
 }

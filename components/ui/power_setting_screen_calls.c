@@ -169,10 +169,26 @@ static uint8_t power_setting_clamp_time_value(uint8_t field, uint8_t value)
     }
 }
 
+static bool power_setting_screen_is_ready(void)
+{
+    return objects.power_setting_scr_lpm_checkbox != NULL &&
+           objects.power_setting_scr_auto_sleep_checkbox != NULL &&
+           objects.power_setting_scr_charge_limit_slider != NULL &&
+           objects.power_setting_scr_charge_limit_label != NULL &&
+           objects.power_setting_scr_start_hour_btn != NULL &&
+           objects.power_setting_scr_start_minute_btn != NULL &&
+           objects.power_setting_scr_end_hour_btn != NULL &&
+           objects.power_setting_scr_end_minute_btn != NULL;
+}
+
 /* ---- 屏幕 load / unload ---- */
 
 static void on_screen_load_start(void)
 {
+    if (!power_setting_screen_is_ready()) {
+        return;
+    }
+
     bool auto_lpm   = nvs_read_bool_default(NVS_KEY_AUTO_LPM, false);
     bool auto_sleep = nvs_read_bool_default(NVS_KEY_AUTO_SLEEP, false);
     uint8_t chg_thr = nvs_read_u8_default(NVS_KEY_CHG_THR, 90);
@@ -351,4 +367,9 @@ void handle_power_setting_scr_time_btn_event(lv_event_t *e)
             }
         }
     }
+}
+
+void power_setting_screen_reload_from_storage(void)
+{
+    on_screen_load_start();
 }

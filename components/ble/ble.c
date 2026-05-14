@@ -16,8 +16,24 @@
 #include "nvs_storage.h"
 #include "esp_bt.h"
 #include "pcf85263a.h"
+#include "nvs.h"
+#include "power_management.h"
 
 #define TAG "BLE"
+
+#define POWER_MGMT_NVS_NAMESPACE "power_mgr"
+#define NVS_KEY_AUTO_SLEEP "pm_auto_sleep"
+#define NVS_KEY_AUTO_LPM "pm_auto_lpm"
+#define NVS_KEY_CHG_THR "pm_chg_thr"
+#define NVS_KEY_SLEEP_START_HOUR "pm_sleep_sh"
+#define NVS_KEY_SLEEP_START_MINUTE "pm_sleep_sm"
+#define NVS_KEY_SLEEP_END_HOUR "pm_sleep_eh"
+#define NVS_KEY_SLEEP_END_MINUTE "pm_sleep_em"
+#define DEFAULT_SLEEP_START_HOUR 22
+#define DEFAULT_SLEEP_START_MINUTE 0
+#define DEFAULT_SLEEP_END_HOUR 6
+#define DEFAULT_SLEEP_END_MINUTE 0
+#define DEFAULT_CHARGE_THRESHOLD 90
 
 /* Device name advertised over BLE */
 #define BLE_DEVICE_NAME "FocusTimer"
@@ -52,10 +68,16 @@ static const ble_uuid128_t send_history_chr_uuid =
     BLE_UUID128_INIT(0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
+/* Characteristic 5 (power settings JSON): 00000000-0000-0000-0000-0000-0000-0005 */
+static const ble_uuid128_t power_settings_chr_uuid =
+    BLE_UUID128_INIT(0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+
 static uint16_t current_day_chr_val_handle;
 static uint16_t history_chr_val_handle;
 static uint16_t datetime_set_chr_val_handle;
 static uint16_t send_history_chr_val_handle;
+static uint16_t power_settings_chr_val_handle;
 
 static bool ble_connected;
 static uint16_t ble_conn_handle;
@@ -78,6 +100,18 @@ static ble_connection_state_cb_t s_conn_state_cb;
 static void *s_conn_state_cb_arg;
 static ble_datetime_updated_cb_t s_datetime_updated_cb;
 static void *s_datetime_updated_cb_arg;
+static ble_power_settings_updated_cb_t s_power_settings_updated_cb;
+static void *s_power_settings_updated_cb_arg;
+
+typedef struct {
+    uint8_t start_hour;
+    uint8_t start_minute;
+    uint8_t end_hour;
+    uint8_t end_minute;
+    bool low_power;
+    bool auto_sleep;
+    uint8_t charge_threshold;
+} ble_power_settings_t;
 
 static void ble_notify_conn_state(bool connected)
 {
@@ -90,6 +124,13 @@ static void ble_notify_datetime_updated(void)
 {
     if (s_datetime_updated_cb != NULL) {
         s_datetime_updated_cb(s_datetime_updated_cb_arg);
+    }
+}
+
+static void ble_notify_power_settings_updated(void)
+{
+    if (s_power_settings_updated_cb != NULL) {
+        s_power_settings_updated_cb(s_power_settings_updated_cb_arg);
     }
 }
 
@@ -133,7 +174,10 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                           struct ble_gatt_access_ctxt *ctxt, void *arg);
 static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt);
 static int ble_handle_send_history_write(struct ble_gatt_access_ctxt *ctxt);
+static int ble_handle_power_settings_write(struct ble_gatt_access_ctxt *ctxt);
 static esp_err_t ble_parse_datetime_json(const char *json, pcf85263a_datetime_t *datetime);
+static esp_err_t ble_parse_power_settings_json(const char *json, ble_power_settings_t *settings);
+static esp_err_t ble_get_power_settings_json(char *json_buf, size_t json_buf_size, size_t *json_len);
 void ble_store_config_init(void);
 
 static bool ble_json_get_int(const cJSON *object, const char *name, int *value)
@@ -145,6 +189,156 @@ static bool ble_json_get_int(const cJSON *object, const char *name, int *value)
 
     *value = item->valueint;
     return true;
+}
+
+static bool ble_json_get_string(const cJSON *object, const char *name, const char **value)
+{
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, name);
+    if (!cJSON_IsString(item) || item->valuestring == NULL) {
+        return false;
+    }
+
+    *value = item->valuestring;
+    return true;
+}
+
+static uint8_t ble_nvs_read_u8_default(const char *key, uint8_t default_val)
+{
+    nvs_handle_t handle;
+    uint8_t value = default_val;
+
+    if (nvs_open(POWER_MGMT_NVS_NAMESPACE, NVS_READONLY, &handle) == ESP_OK) {
+        if (nvs_get_u8(handle, key, &value) != ESP_OK) {
+            value = default_val;
+        }
+        nvs_close(handle);
+    }
+
+    return value;
+}
+
+static bool ble_parse_hhmm_string(const char *value, uint8_t *hour, uint8_t *minute)
+{
+    if (value == NULL || hour == NULL || minute == NULL || strlen(value) != 4U) {
+        return false;
+    }
+
+    if (value[0] < '0' || value[0] > '9' ||
+        value[1] < '0' || value[1] > '9' ||
+        value[2] < '0' || value[2] > '9' ||
+        value[3] < '0' || value[3] > '9') {
+        return false;
+    }
+
+    uint8_t parsed_hour = (uint8_t)((value[0] - '0') * 10 + (value[1] - '0'));
+    uint8_t parsed_minute = (uint8_t)((value[2] - '0') * 10 + (value[3] - '0'));
+
+    if (parsed_hour > 23 || parsed_minute > 59) {
+        return false;
+    }
+
+    *hour = parsed_hour;
+    *minute = parsed_minute;
+    return true;
+}
+
+static esp_err_t ble_parse_power_settings_json(const char *json, ble_power_settings_t *settings)
+{
+    cJSON *root = NULL;
+    const char *start_time = "0000";
+    const char *stop_time = "0000";
+    uint8_t start_hour = 0;
+    uint8_t start_minute = 0;
+    uint8_t stop_hour = 0;
+    uint8_t stop_minute = 0;
+    int low_power = 0;
+    int auto_sleep = 0;
+    int charge_threshold = 0;
+
+    if (json == NULL || settings == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    root = cJSON_Parse(json);
+    if (root == NULL) {
+        ESP_LOGW(TAG, "Invalid power settings JSON");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!ble_json_get_string(root, "start_time", &start_time) ||
+        !ble_json_get_string(root, "stop_time", &stop_time)||
+        !ble_json_get_int(root, "low_power", &low_power) ||
+        !ble_json_get_int(root, "auto_sleep", &auto_sleep) ||
+        !ble_json_get_int(root, "charge_thresh", &charge_threshold)) {
+        cJSON_Delete(root);
+        ESP_LOGW(TAG, "Power settings JSON missing required fields");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!ble_parse_hhmm_string(start_time, &start_hour, &start_minute) ||
+        !ble_parse_hhmm_string(stop_time, &stop_hour, &stop_minute)) {
+        cJSON_Delete(root);
+        ESP_LOGW(TAG, "Power settings time value out of range");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    cJSON_Delete(root);
+
+    if ((low_power != 0 && low_power != 1) ||
+        (auto_sleep != 0 && auto_sleep != 1) ||
+        charge_threshold < 0 || charge_threshold > 100) {
+        ESP_LOGW(TAG, "Power settings value out of range");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    settings->start_hour = start_hour;
+    settings->start_minute = start_minute;
+    settings->end_hour = stop_hour;
+    settings->end_minute = stop_minute;
+    settings->low_power = low_power != 0;
+    settings->auto_sleep = auto_sleep != 0;
+    settings->charge_threshold = (uint8_t)charge_threshold;
+    return ESP_OK;
+}
+
+static esp_err_t ble_get_power_settings_json(char *json_buf, size_t json_buf_size, size_t *json_len)
+{
+    ble_power_settings_t settings = {
+        .start_hour = ble_nvs_read_u8_default(NVS_KEY_SLEEP_START_HOUR, DEFAULT_SLEEP_START_HOUR),
+        .start_minute = ble_nvs_read_u8_default(NVS_KEY_SLEEP_START_MINUTE, DEFAULT_SLEEP_START_MINUTE),
+        .end_hour = ble_nvs_read_u8_default(NVS_KEY_SLEEP_END_HOUR, DEFAULT_SLEEP_END_HOUR),
+        .end_minute = ble_nvs_read_u8_default(NVS_KEY_SLEEP_END_MINUTE, DEFAULT_SLEEP_END_MINUTE),
+        .low_power = power_management_get_auto_lightsleep(),
+        .auto_sleep = power_management_get_auto_sleep(),
+        .charge_threshold = power_management_get_charge_threshold(),
+    };
+    int written = 0;
+
+    if (json_buf == NULL || json_len == NULL || json_buf_size == 0U) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (settings.start_hour > 23) settings.start_hour = 0;
+    if (settings.start_minute > 59) settings.start_minute = 0;
+    if (settings.end_hour > 23) settings.end_hour = 0;
+    if (settings.end_minute > 59) settings.end_minute = 0;
+
+    written = snprintf(json_buf,
+                       json_buf_size,
+                       "{\"start_time\":\"%02u%02u\",\"stop_time\":\"%02u%02u\",\"low_power\":%u,\"auto_sleep\":%u,\"charge_thresh\":%u}",
+                       settings.start_hour,
+                       settings.start_minute,
+                       settings.end_hour,
+                       settings.end_minute,
+                       settings.low_power ? 1U : 0U,
+                       settings.auto_sleep ? 1U : 0U,
+                       settings.charge_threshold);
+    if (written < 0 || (size_t)written >= json_buf_size) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    *json_len = (size_t)written;
+    return ESP_OK;
 }
 
 static esp_err_t ble_parse_datetime_json(const char *json, pcf85263a_datetime_t *datetime)
@@ -250,6 +444,73 @@ static int ble_handle_datetime_write(struct ble_gatt_access_ctxt *ctxt)
     ESP_LOGI(TAG, "RTC datetime updated over BLE: %u-%02u-%02u %02u:%02u:%02u weekday=%u",
              datetime.year, datetime.month, datetime.day,
              datetime.hour, datetime.minute, datetime.second, datetime.weekday);
+    return 0;
+}
+
+static int ble_handle_power_settings_write(struct ble_gatt_access_ctxt *ctxt)
+{
+    uint16_t payload_len = OS_MBUF_PKTLEN(ctxt->om);
+    char *json_buf = NULL;
+    ble_power_settings_t settings = {0};
+    nvs_handle_t handle;
+
+    if (payload_len == 0U) {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+
+    json_buf = calloc((size_t)payload_len + 1U, sizeof(char));
+    if (json_buf == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate power settings JSON buffer");
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+
+    int rc = os_mbuf_copydata(ctxt->om, 0, payload_len, json_buf);
+    if (rc != 0) {
+        free(json_buf);
+        ESP_LOGE(TAG, "Failed to copy power settings payload: %d", rc);
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    esp_err_t err = ble_parse_power_settings_json(json_buf, &settings);
+    free(json_buf);
+    if (err != ESP_OK) {
+        return BLE_ATT_ERR_INVALID_PDU;
+    }
+
+    err = nvs_open(POWER_MGMT_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open power settings NVS: %s", esp_err_to_name(err));
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    err = nvs_set_u8(handle, NVS_KEY_AUTO_LPM, settings.low_power ? 1U : 0U);
+    err |= nvs_set_u8(handle, NVS_KEY_AUTO_SLEEP, settings.auto_sleep ? 1U : 0U);
+    err |= nvs_set_u8(handle, NVS_KEY_CHG_THR, settings.charge_threshold);
+    err |= nvs_set_u8(handle, NVS_KEY_SLEEP_START_HOUR, settings.start_hour);
+    err |= nvs_set_u8(handle, NVS_KEY_SLEEP_START_MINUTE, settings.start_minute);
+    err |= nvs_set_u8(handle, NVS_KEY_SLEEP_END_HOUR, settings.end_hour);
+    err |= nvs_set_u8(handle, NVS_KEY_SLEEP_END_MINUTE, settings.end_minute);
+    err |= nvs_commit(handle);
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to persist power settings: %s", esp_err_to_name(err));
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+
+    (void)power_management_set_auto_lightsleep(settings.low_power);
+    (void)power_management_set_auto_sleep(settings.auto_sleep);
+    (void)power_management_set_charge_threshold(settings.charge_threshold);
+    ble_notify_power_settings_updated();
+
+    ESP_LOGI(TAG,
+             "Power settings updated over BLE: low_power=%u auto_sleep=%u charge_thresh=%u sleep_period=%02u:%02u-%02u:%02u",
+             settings.low_power ? 1U : 0U,
+             settings.auto_sleep ? 1U : 0U,
+             settings.charge_threshold,
+             settings.start_hour,
+             settings.start_minute,
+             settings.end_hour,
+             settings.end_minute);
     return 0;
 }
 
@@ -381,6 +642,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .flags = BLE_GATT_CHR_F_WRITE,
                 .val_handle = &send_history_chr_val_handle,
             }, {
+                /* Power settings JSON */
+                .uuid = &power_settings_chr_uuid.u,
+                .access_cb = gatt_access_cb,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+                .val_handle = &power_settings_chr_val_handle,
+            }, {
                 0, /* Terminator */
             },
         },
@@ -430,6 +697,18 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
             free(json_buf);
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
         }
+
+        if (attr_handle == power_settings_chr_val_handle) {
+            char json_buf[160];
+            size_t json_len = 0;
+            esp_err_t err = ble_get_power_settings_json(json_buf, sizeof(json_buf), &json_len);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to get power settings JSON: %s", esp_err_to_name(err));
+                return BLE_ATT_ERR_UNLIKELY;
+            }
+            rc = os_mbuf_append(ctxt->om, json_buf, json_len);
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        }
         break;
 
     case BLE_GATT_ACCESS_OP_WRITE_CHR:
@@ -442,6 +721,10 @@ static int gatt_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 
         if (attr_handle == send_history_chr_val_handle) {
             return ble_handle_send_history_write(ctxt);
+        }
+
+        if (attr_handle == power_settings_chr_val_handle) {
+            return ble_handle_power_settings_write(ctxt);
         }
         break;
 
@@ -757,6 +1040,12 @@ void ble_register_datetime_updated_cb(ble_datetime_updated_cb_t cb, void *arg)
 {
     s_datetime_updated_cb = cb;
     s_datetime_updated_cb_arg = arg;
+}
+
+void ble_register_power_settings_updated_cb(ble_power_settings_updated_cb_t cb, void *arg)
+{
+    s_power_settings_updated_cb = cb;
+    s_power_settings_updated_cb_arg = arg;
 }
 
 bool ble_is_connected(void)

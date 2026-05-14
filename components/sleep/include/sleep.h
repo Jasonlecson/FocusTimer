@@ -40,6 +40,11 @@ void sleep_register_shipping_mode_cb(void);
  */
 void sleep_register_ble_datetime_cb(void);
 
+/**
+ * @brief 注册 BLE 电源设置更新回调
+ */
+void sleep_register_ble_power_settings_cb(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -70,6 +70,7 @@ void app_main(void)
     lvgl_indev_init();
     _lock_release(&lvgl_api_lock);
     sleep_register_ble_datetime_cb();
+    sleep_register_ble_power_settings_cb();
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
     /* 如果是触摸唤醒，通常意味着用户要操作。
