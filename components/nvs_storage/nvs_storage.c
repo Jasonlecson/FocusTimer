@@ -764,3 +764,49 @@ esp_err_t nvs_storage_get_daily_totals(nvs_storage_daily_totals_t *totals)
     portEXIT_CRITICAL(&s_nvs_storage_lock);
     return ESP_OK;
 }
+
+esp_err_t nvs_storage_get_tracked_date(char *date_buffer, size_t buffer_size)
+{
+    if (date_buffer == NULL || buffer_size < NVS_STORAGE_DATE_STR_LEN)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    portENTER_CRITICAL(&s_nvs_storage_lock);
+    if (!s_nvs_storage_state.initialized)
+    {
+        portEXIT_CRITICAL(&s_nvs_storage_lock);
+        return ESP_ERR_INVALID_STATE;
+    }
+    memcpy(date_buffer, s_nvs_storage_state.current_date, NVS_STORAGE_DATE_STR_LEN);
+    portEXIT_CRITICAL(&s_nvs_storage_lock);
+    return ESP_OK;
+}
+
+esp_err_t nvs_storage_set_daily_counts(uint8_t focus_count, uint8_t nap_count)
+{
+    portENTER_CRITICAL(&s_nvs_storage_lock);
+    if (!s_nvs_storage_state.initialized)
+    {
+        portEXIT_CRITICAL(&s_nvs_storage_lock);
+        return ESP_ERR_INVALID_STATE;
+    }
+    s_nvs_storage_state.totals.focus_count = focus_count;
+    s_nvs_storage_state.totals.nap_count = nap_count;
+    portEXIT_CRITICAL(&s_nvs_storage_lock);
+    return ESP_OK;
+}
+
+esp_err_t nvs_storage_set_daily_minutes(uint16_t focus_minutes, uint16_t rest_minutes)
+{
+    portENTER_CRITICAL(&s_nvs_storage_lock);
+    if (!s_nvs_storage_state.initialized)
+    {
+        portEXIT_CRITICAL(&s_nvs_storage_lock);
+        return ESP_ERR_INVALID_STATE;
+    }
+    s_nvs_storage_state.totals.focus_minutes = focus_minutes;
+    s_nvs_storage_state.totals.rest_minutes = rest_minutes;
+    portEXIT_CRITICAL(&s_nvs_storage_lock);
+    return ESP_OK;
+}
