@@ -48,6 +48,7 @@ typedef struct _objects_t {
     lv_obj_t *submain_scr_enter_mp3_btn;
     lv_obj_t *submain_scr_enter_power_setting_btn;
     lv_obj_t *submain_scr_enter_power_setting_btn_1;
+    lv_obj_t *submain_version_label;
     lv_obj_t *mp3_scr_back_to_main_btn;
     lv_obj_t *mp3_scr_musictitle_label;
     lv_obj_t *mp3_scr_play_progress;

@@ -172,6 +172,7 @@ void create_screen_sub_main() {
     objects.sub_main = obj;
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_submain_scr, LV_EVENT_SCREEN_LOAD_START, (void *)0);
     add_style_screen_style_dark(obj);
     {
         lv_obj_t *parent_obj = obj;
@@ -290,6 +291,15 @@ void create_screen_sub_main() {
                     lv_label_set_text(obj, "数据同步");
                 }
             }
+        }
+        {
+            // submain_version_label
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.submain_version_label = obj;
+            lv_obj_set_pos(obj, 304, 144);
+            lv_obj_set_size(obj, 80, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_label_set_text(obj, "v0.0.0");
         }
     }
     
