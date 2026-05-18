@@ -340,6 +340,7 @@ void power_management_enter_deepsleep(uint32_t wakeup_time_ms)
 {
     /* 停止空闲计时器，避免 deep sleep 期间触发 */
     power_management_stop_idle_timer();
+    s_deepsleep_idle_detect_enabled = false;
 
     /* 外设准备：允许在 deep sleep 前关断耗电外设 */
     if (s_pre_deepsleep_cb != NULL)
@@ -347,8 +348,15 @@ void power_management_enter_deepsleep(uint32_t wakeup_time_ms)
         s_pre_deepsleep_cb(s_pre_deepsleep_user_data);
     }
 
+    /* 清掉上一轮 deep sleep 遗留的唤醒源配置/状态，避免下一次入睡时误复用旧 timer。 */
+    esp_err_t err = esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    if (err != ESP_OK)
+    {
+        ESP_LOGW(TAG, "disable previous wakeup sources failed: %s", esp_err_to_name(err));
+    }
+
     /* 定时唤醒：定期更新时间显示 */
-    esp_err_t err = esp_sleep_enable_timer_wakeup(wakeup_time_ms * 1000ULL);
+    err = esp_sleep_enable_timer_wakeup(wakeup_time_ms * 1000ULL);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "enable timer wakeup failed: %s", esp_err_to_name(err));
