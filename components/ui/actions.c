@@ -304,3 +304,12 @@ void action_data_sync_scr(lv_event_t *e)
 {
     handle_data_sync_scr_event(e);
 }
+
+void action_submain_scr(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SCREEN_LOAD_START)
+    {
+        lv_label_set_text(objects.submain_version_label, "v" FOCUS_TIMER_VERSION);
+    }
+}
