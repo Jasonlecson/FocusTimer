@@ -313,8 +313,11 @@ void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
     if (key_index < TOUCH_KEY_COUNT && !s_touch_key_repeat_active[key_index])
     {
         trigger_touch_key_locked(key_index);
-        s_touch_key_repeat_active[key_index] = true;
-        s_touch_key_next_repeat_us[key_index] = esp_timer_get_time() + ((int64_t)TOUCH_KEY_INITIAL_REPEAT_DELAY_MS * 1000);
+        if (key_index != TOUCH_KEY_SELECT_INDEX)
+        {
+            s_touch_key_repeat_active[key_index] = true;
+            s_touch_key_next_repeat_us[key_index] = esp_timer_get_time() + ((int64_t)TOUCH_KEY_INITIAL_REPEAT_DELAY_MS * 1000);
+        }
     }
     taskEXIT_CRITICAL(&s_enc_lock);
 }
