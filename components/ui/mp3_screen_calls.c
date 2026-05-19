@@ -532,8 +532,8 @@ static void mp3_screen_update_task(void *arg)
 			} else if (cmd == MP3_CMD_NEXT) {
 				s_cleanup_track(&f, &tx_chan);
 				s_set_next_index(true);
-				s_state.paused = false;
-				s_set_amp_enabled(true);
+				s_state.paused = true;
+				s_set_amp_enabled(false);
 				s_state.playing = false;
 				s_state.track_duration_ms = 0;
 				s_state.track_position_ms = 0;
@@ -542,8 +542,8 @@ static void mp3_screen_update_task(void *arg)
 			} else if (cmd == MP3_CMD_PREV) {
 				s_cleanup_track(&f, &tx_chan);
 				s_set_next_index(false);
-				s_state.paused = false;
-				s_set_amp_enabled(true);
+				s_state.paused = true;
+				s_set_amp_enabled(false);
 				s_state.playing = false;
 				s_state.track_duration_ms = 0;
 				s_state.track_position_ms = 0;
