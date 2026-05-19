@@ -359,8 +359,8 @@ void create_screen_mp3() {
             // mp3_scr_musictitle_label
             lv_obj_t *obj = lv_label_create(parent_obj);
             objects.mp3_scr_musictitle_label = obj;
-            lv_obj_set_pos(obj, 53, 46);
-            lv_obj_set_size(obj, 279, 24);
+            lv_obj_set_pos(obj, 52, 29);
+            lv_obj_set_size(obj, 279, 50);
             add_style_label_style(obj);
             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_label_set_text(obj, "音乐标题");
