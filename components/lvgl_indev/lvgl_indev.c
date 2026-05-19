@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/lock.h>
+#include <stdint.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -10,10 +11,21 @@
 #include "power_management.h"
 
 #define TAG "lvgl_indev"
+#define TOUCH_KEY_COUNT 3U
+#define TOUCH_KEY_LEFT_INDEX 0U
+#define TOUCH_KEY_SELECT_INDEX 1U
+#define TOUCH_KEY_RIGHT_INDEX 2U
+#define TOUCH_KEY_INITIAL_REPEAT_DELAY_MS 400U
+#define TOUCH_KEY_REPEAT_INTERVAL_MS 150U
+#define TOUCH_KEY_REPEAT_MAX_PENDING_CLICKS 2U
 
 static portMUX_TYPE s_enc_lock = portMUX_INITIALIZER_UNLOCKED;
 static int16_t encoder_diff = 0;
 static lv_indev_state_t encoder_state = LV_INDEV_STATE_RELEASED;
+static bool s_touch_key_repeat_active[TOUCH_KEY_COUNT] = {false};
+static bool s_center_key_pulse_pressed = false;
+static uint8_t s_center_key_pending_clicks = 0;
+static int64_t s_touch_key_next_repeat_us[TOUCH_KEY_COUNT] = {0};
 #define MAX_PAGES 10
 #define MAX_ITEMS_PER_PAGE 30
 
@@ -30,6 +42,55 @@ static uint32_t s_page_count = 0;
 
 static lv_group_t *g_encoder_group = NULL;
 static lv_obj_t *g_current_screen = NULL;
+
+static int16_t touch_key_encoder_step(uint8_t key_index)
+{
+    lv_disp_rotation_t rotation = lvgl_user_get_rotation();
+
+    if (rotation == LV_DISPLAY_ROTATION_270)
+    {
+        if (key_index == TOUCH_KEY_LEFT_INDEX)
+        {
+            return 1;
+        }
+        if (key_index == TOUCH_KEY_RIGHT_INDEX)
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        if (key_index == TOUCH_KEY_LEFT_INDEX)
+        {
+            return -1;
+        }
+        if (key_index == TOUCH_KEY_RIGHT_INDEX)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void queue_center_key_click_locked(void)
+{
+    if (s_center_key_pending_clicks < TOUCH_KEY_REPEAT_MAX_PENDING_CLICKS)
+    {
+        s_center_key_pending_clicks++;
+    }
+}
+
+static void trigger_touch_key_locked(uint8_t key_index)
+{
+    if (key_index == TOUCH_KEY_SELECT_INDEX)
+    {
+        queue_center_key_click_locked();
+        return;
+    }
+
+    encoder_diff += touch_key_encoder_step(key_index);
+}
 
 // 查找页面是否已经在静态数组中
 static int find_page_index(lv_obj_t *screen)
@@ -186,9 +247,42 @@ static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
     (void)indev;
     taskENTER_CRITICAL(&s_enc_lock);
+
+    int64_t now_us = esp_timer_get_time();
+    for (uint8_t key_index = 0; key_index < TOUCH_KEY_COUNT; key_index++)
+    {
+        if (s_touch_key_repeat_active[key_index] && now_us >= s_touch_key_next_repeat_us[key_index])
+        {
+            trigger_touch_key_locked(key_index);
+            s_touch_key_next_repeat_us[key_index] = now_us + ((int64_t)TOUCH_KEY_REPEAT_INTERVAL_MS * 1000);
+        }
+    }
+
     data->enc_diff = encoder_diff;
-    data->state = encoder_state;
     encoder_diff = 0;
+
+    if (s_center_key_pulse_pressed)
+    {
+        data->state = LV_INDEV_STATE_RELEASED;
+        encoder_state = LV_INDEV_STATE_RELEASED;
+        s_center_key_pulse_pressed = false;
+        if (s_center_key_pending_clicks > 0)
+        {
+            s_center_key_pending_clicks--;
+        }
+    }
+    else if (s_center_key_pending_clicks > 0)
+    {
+        data->state = LV_INDEV_STATE_PRESSED;
+        encoder_state = LV_INDEV_STATE_PRESSED;
+        s_center_key_pulse_pressed = true;
+    }
+    else
+    {
+        data->state = LV_INDEV_STATE_RELEASED;
+        encoder_state = LV_INDEV_STATE_RELEASED;
+    }
+
     taskEXIT_CRITICAL(&s_enc_lock);
 }
 
@@ -203,42 +297,27 @@ void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
     taskENTER_CRITICAL(&s_enc_lock);
     if (!pressed)
     {
-        if (key_index == 1)
+        if (key_index < TOUCH_KEY_COUNT)
         {
-            encoder_state = LV_INDEV_STATE_RELEASED;
+            s_touch_key_repeat_active[key_index] = false;
+            s_touch_key_next_repeat_us[key_index] = 0;
+            if (key_index == TOUCH_KEY_SELECT_INDEX && s_center_key_pending_clicks > 1)
+            {
+                s_center_key_pending_clicks = 1;
+            }
         }
         taskEXIT_CRITICAL(&s_enc_lock);
         return;
     }
-    // 屏幕旋转角度为270度时，交换左右按键的功能
-    lv_disp_rotation_t rotation = lvgl_user_get_rotation();
-    if (rotation == LV_DISPLAY_ROTATION_270)
+
+    if (key_index < TOUCH_KEY_COUNT && !s_touch_key_repeat_active[key_index])
     {
-        // 270度时，交换左右按键功能
-        if (key_index == 0)
+        trigger_touch_key_locked(key_index);
+        if (key_index != TOUCH_KEY_SELECT_INDEX)
         {
-            encoder_diff++;
+            s_touch_key_repeat_active[key_index] = true;
+            s_touch_key_next_repeat_us[key_index] = esp_timer_get_time() + ((int64_t)TOUCH_KEY_INITIAL_REPEAT_DELAY_MS * 1000);
         }
-        else if (key_index == 2)
-        {
-            encoder_diff--;
-        }
-    }
-    else
-    {
-        // 其他角度保持原逻辑
-        if (key_index == 0)
-        {
-            encoder_diff--;
-        }
-        else if (key_index == 2)
-        {
-            encoder_diff++;
-        }
-    }
-    if (key_index == 1)
-    {
-        encoder_state = LV_INDEV_STATE_PRESSED;
     }
     taskEXIT_CRITICAL(&s_enc_lock);
 }
