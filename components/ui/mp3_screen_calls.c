@@ -62,8 +62,21 @@ typedef struct {
 	uint32_t track_position_ms;
 } mp3_state_t;
 
+typedef struct {
+	bool playlist_loaded;
+	size_t file_count;
+	int current_index;
+	bool paused;
+	bool playing;
+	uint8_t volume_percent;
+	uint32_t track_duration_ms;
+	uint32_t track_position_ms;
+	char current_path[SDSPI_MAX_PATH_LEN];
+} mp3_ui_snapshot_t;
+
 static const char *TAG = "mp3_screen";
 static TaskHandle_t s_mp3_task_handle = NULL;
+static lv_timer_t *s_mp3_ui_timer = NULL;
 static portMUX_TYPE s_mp3_lock = portMUX_INITIALIZER_UNLOCKED;
 static mp3_state_t s_state = {
 	.playlist_loaded = false,
@@ -76,6 +89,9 @@ static mp3_state_t s_state = {
 	.track_duration_ms = 0,
 	.track_position_ms = 0,
 };
+
+static void s_update_ui_from_snapshot(const mp3_ui_snapshot_t *snapshot);
+static void s_refresh_ui_timer_cb(lv_timer_t *timer);
 
 static void s_apply_volume_16bit(int16_t *samples, size_t sample_count, uint8_t volume_percent)
 {
@@ -220,7 +236,33 @@ static esp_err_t s_parse_wav_header(FILE *f, wav_info_t *out_info)
 	return ESP_OK;
 }
 
-static void s_update_ui_locked(void)
+static void s_take_ui_snapshot(mp3_ui_snapshot_t *snapshot)
+{
+	if (snapshot == NULL) {
+		return;
+	}
+
+	portENTER_CRITICAL(&s_mp3_lock);
+	snapshot->playlist_loaded = s_state.playlist_loaded;
+	snapshot->file_count = s_state.files.count;
+	snapshot->current_index = s_state.current_index;
+	snapshot->paused = s_state.paused;
+	snapshot->playing = s_state.playing;
+	snapshot->volume_percent = s_state.volume_percent;
+	snapshot->track_duration_ms = s_state.track_duration_ms;
+	snapshot->track_position_ms = s_state.track_position_ms;
+	snapshot->current_path[0] = '\0';
+	if (s_state.playlist_loaded && s_state.files.count > 0 &&
+		s_state.current_index >= 0 && s_state.current_index < (int)s_state.files.count) {
+		(void)snprintf(snapshot->current_path,
+				   sizeof(snapshot->current_path),
+				   "%s",
+				   s_state.files.paths[s_state.current_index]);
+	}
+	portEXIT_CRITICAL(&s_mp3_lock);
+}
+
+static void s_update_ui_from_snapshot(const mp3_ui_snapshot_t *snapshot)
 {
 	const char *title = "无音频文件";
 	uint32_t duration_sec = 0;
@@ -230,15 +272,18 @@ static void s_update_ui_locked(void)
 	char dur_text[8];
 	char file_count_text[24];
 
-	if (s_state.playlist_loaded && s_state.files.count > 0 &&
-		s_state.current_index >= 0 && s_state.current_index < (int)s_state.files.count) {
-		title = s_basename(s_state.files.paths[s_state.current_index]);
+	if (snapshot == NULL) {
+		return;
 	}
 
-	if (s_state.track_duration_ms > 0) {
-		duration_sec = s_state.track_duration_ms / 1000U;
+	if (snapshot->current_path[0] != '\0') {
+		title = s_basename(snapshot->current_path);
 	}
-	position_sec = s_state.track_position_ms / 1000U;
+
+	if (snapshot->track_duration_ms > 0) {
+		duration_sec = snapshot->track_duration_ms / 1000U;
+	}
+	position_sec = snapshot->track_position_ms / 1000U;
 	if (position_sec > duration_sec) {
 		position_sec = duration_sec;
 	}
@@ -260,11 +305,11 @@ static void s_update_ui_locked(void)
 		lv_label_set_text(objects.mp3_scr_current_total_time_label, time_text);
 	}
 
-	if (s_state.playlist_loaded && s_state.files.count > 0 &&
-		s_state.current_index >= 0 && s_state.current_index < (int)s_state.files.count) {
+	if (snapshot->playlist_loaded && snapshot->file_count > 0 &&
+		snapshot->current_index >= 0 && snapshot->current_index < (int)snapshot->file_count) {
 		snprintf(file_count_text, sizeof(file_count_text), "%d/%lu",
-				 s_state.current_index + 1,
-				 (unsigned long)s_state.files.count);
+				 snapshot->current_index + 1,
+				 (unsigned long)snapshot->file_count);
 	} else {
 		snprintf(file_count_text, sizeof(file_count_text), "0/0");
 	}
@@ -274,13 +319,13 @@ static void s_update_ui_locked(void)
 
 	if (objects.mp3_scr_volume_slider != NULL) {
 		lv_slider_set_range(objects.mp3_scr_volume_slider, 0, 10);
-		lv_slider_set_value(objects.mp3_scr_volume_slider, s_state.volume_percent / 10, LV_ANIM_OFF);
+		lv_slider_set_value(objects.mp3_scr_volume_slider, snapshot->volume_percent / 10, LV_ANIM_OFF);
 	}
 
 	if (objects.mp3_scr_play_pause_btn != NULL) {
 		lv_obj_t *btn_label = lv_obj_get_child(objects.mp3_scr_play_pause_btn, 0);
 		if (btn_label != NULL) {
-			if (s_state.playing && !s_state.paused) {
+			if (snapshot->playing && !snapshot->paused) {
 				lv_label_set_text(btn_label, "");
 				lv_obj_set_pos(btn_label, -10, -9);
 			} else {
@@ -293,9 +338,15 @@ static void s_update_ui_locked(void)
 
 static void s_refresh_ui(void)
 {
-	_lock_acquire(&lvgl_api_lock);
-	s_update_ui_locked();
-	_lock_release(&lvgl_api_lock);
+	mp3_ui_snapshot_t snapshot = {0};
+	s_take_ui_snapshot(&snapshot);
+	s_update_ui_from_snapshot(&snapshot);
+}
+
+static void s_refresh_ui_timer_cb(lv_timer_t *timer)
+{
+	(void)timer;
+	s_refresh_ui();
 }
 
 static void s_set_amp_enabled(bool enable)
@@ -452,10 +503,11 @@ static void mp3_screen_update_task(void *arg)
 	}
 
 	s_load_playlist();
+	portENTER_CRITICAL(&s_mp3_lock);
 	s_state.paused = true;
+	portEXIT_CRITICAL(&s_mp3_lock);
 	s_set_amp_enabled(false);
 	next_ui_refresh_tick = xTaskGetTickCount();
-	s_refresh_ui();
 	ui_dirty = false;
 
 	while (!s_is_exit_requested()) {
@@ -503,7 +555,6 @@ static void mp3_screen_update_task(void *arg)
 		TickType_t now = xTaskGetTickCount();
 		bool periodic_refresh = (s_state.playing && !s_state.paused);
 		if (ui_dirty || (periodic_refresh && now >= next_ui_refresh_tick)) {
-			s_refresh_ui();
 			if (periodic_refresh) {
 				next_ui_refresh_tick = now + pdMS_TO_TICKS(MP3_UI_REFRESH_INTERVAL_MS);
 			} else {
@@ -627,6 +678,14 @@ static void mp3_screen_update_task(void *arg)
 
 void mp3_screen_start_update_task(void)
 {
+	if (s_mp3_ui_timer == NULL) {
+		s_mp3_ui_timer = lv_timer_create(s_refresh_ui_timer_cb, MP3_UI_REFRESH_INTERVAL_MS, NULL);
+	}
+	if (s_mp3_ui_timer != NULL) {
+		lv_timer_resume(s_mp3_ui_timer);
+	}
+	s_refresh_ui();
+
 	if (s_mp3_task_handle != NULL) {
 		portENTER_CRITICAL(&s_mp3_lock);
 		s_state.exit_requested = false;
@@ -658,6 +717,10 @@ void mp3_screen_start_update_task(void)
 
 void mp3_screen_stop_update_task(void)
 {
+	if (s_mp3_ui_timer != NULL) {
+		lv_timer_pause(s_mp3_ui_timer);
+	}
+
 	if (s_mp3_task_handle == NULL) {
 		return;
 	}
