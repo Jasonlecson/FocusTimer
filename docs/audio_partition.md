@@ -3,7 +3,7 @@
 ## 1) 准备 WAV
 要求：PCM、16-bit、单声道或双声道、标准44字节头。
 
-推荐参数（使用 [`MP3toWAV.html`](MP3toWAV.html) 工具）：
+推荐参数（使用 [`MP3toWAV.html`](../tools/MP3toWAV.html) 工具）：
 - 采样率：**22050 Hz**
 - 采样位数：**16-bit PCM**
 - 声道：**单声道 (Mono)**
