@@ -236,7 +236,7 @@ void main_screen_start_update_task(void)
 
     BaseType_t task_created = xTaskCreate(main_screen_update_task,
                                           "main_screen_update",
-                                          4096,
+                                          3072,
                                           NULL,
                                           5,
                                           &s_main_screen_update_task_handle);

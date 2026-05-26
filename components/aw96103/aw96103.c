@@ -218,7 +218,7 @@ esp_err_t aw96103_init()
     s_cfg.i2c_addr = AW96103_I2C_ADDR;
     s_cfg.i2c_clk_hz = 400000;
     s_cfg.touch_threshold = 200000;
-    s_cfg.task_stack_size = 4096;
+    s_cfg.task_stack_size = 1024;
     s_cfg.task_priority = 10;
     s_cfg.scan_period = 50;
     s_cfg.doze_mode_interval = 1; // 设定为1，实际进入doze mode的时间为1*4=4ms

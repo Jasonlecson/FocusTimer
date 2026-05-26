@@ -715,7 +715,7 @@ void mp3_screen_start_update_task(void)
 
 	BaseType_t created = xTaskCreate(mp3_screen_update_task,
 									 "mp3_screen_update",
-									 6144,
+									 3072,
 									 NULL,
 									 5,
 									 &s_mp3_task_handle);
