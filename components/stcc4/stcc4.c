@@ -366,7 +366,7 @@ void stcc4_start_measurement_task()
     }
     if (stcc4_task_handle == NULL)
     {
-        xTaskCreate(stcc4_measurement_task, "stcc4_measurement_task", 4096, NULL, 5, &stcc4_task_handle);
+        xTaskCreate(stcc4_measurement_task, "stcc4_measurement_task", 2536, NULL, 5, &stcc4_task_handle);
         ESP_LOGI(LOG_TAG, "STCC4 measurement task started");
     }
 }

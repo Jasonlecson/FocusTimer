@@ -589,7 +589,7 @@ void aw32001_power_key_init(void)
     gpio_isr_handler_add(PWR_KEY_PIN, pwr_key_isr_handler, (void *)(uint32_t)PWR_KEY_PIN);
 
     // 创建监控任务
-    xTaskCreate(pwr_key_monitor_task, "pwr_key_monitor", 2048, NULL, 5, NULL);
+    xTaskCreate(pwr_key_monitor_task, "pwr_key_monitor", 512, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "Power key interrupt initialized, pin=%d", PWR_KEY_PIN);
 }

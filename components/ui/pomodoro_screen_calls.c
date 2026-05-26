@@ -551,7 +551,7 @@ void pomodoro_screen_start_update_task(void)
 
     BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
                                           "pomodoro_screen_update",
-                                          4096,
+                                          2048,
                                           NULL,
                                           5,
                                           &s_pomodoro_screen_update_task_handle);
