@@ -705,17 +705,12 @@ void mp3_screen_start_update_task(void)
 	s_refresh_ui();
 
 	if (s_mp3_task_handle != NULL) {
-		portENTER_CRITICAL(&s_mp3_lock);
-		s_state.exit_requested = false;
-		s_state.pending_cmd = MP3_CMD_RELOAD;
-		portEXIT_CRITICAL(&s_mp3_lock);
-		xTaskNotifyGive(s_mp3_task_handle);
 		return;
 	}
 
 	portENTER_CRITICAL(&s_mp3_lock);
 	s_state.exit_requested = false;
-	s_state.pending_cmd = MP3_CMD_RELOAD;
+	s_state.pending_cmd = MP3_CMD_NONE;
 	portEXIT_CRITICAL(&s_mp3_lock);
 
 	BaseType_t created = xTaskCreate(mp3_screen_update_task,
@@ -742,13 +737,6 @@ void mp3_screen_stop_update_task(void)
 	if (s_mp3_task_handle == NULL) {
 		return;
 	}
-
-	portENTER_CRITICAL(&s_mp3_lock);
-	s_state.exit_requested = true;
-	s_state.pending_cmd = MP3_CMD_NONE;
-	portEXIT_CRITICAL(&s_mp3_lock);
-
-	xTaskNotifyGive(s_mp3_task_handle);
 }
 
 void mp3_screen_toggle_pause(void)
