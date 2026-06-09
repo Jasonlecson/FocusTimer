@@ -686,7 +686,7 @@ void imu_start_flip_detection_task(void)
 {
     if (flip_detection_task_handle == NULL)
     {
-        xTaskCreate(flip_detection_task, "imu_flip_detection", 1024, NULL, 3, &flip_detection_task_handle);
+        xTaskCreate(flip_detection_task, "imu_flip_detection", 4096, NULL, 3, &flip_detection_task_handle);
         // ESP_LOGI(LOG_TAG, "Flip detection task created");
     }
 }
