@@ -10,6 +10,8 @@
 #define TAG "AW32001"
 
 #define PWR_KEY_LONG_PRESS_MS 2000 // 长按2秒触发shipping mode
+#define PWR_KEY_MONITOR_TASK_STACK_SIZE 4096
+#define PWR_KEY_MONITOR_TASK_PRIORITY 5
 
 static QueueHandle_t gpio_evt_queue = NULL;
 static i2c_master_dev_handle_t dev_handle = NULL;
@@ -568,6 +570,11 @@ void aw32001_power_key_init(void)
 {
     // 创建事件队列
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
+    if (gpio_evt_queue == NULL)
+    {
+        ESP_LOGE(TAG, "Power key event queue create failed");
+        return;
+    }
 
     // 配置电源按键引脚为输入，上升沿中断
     gpio_config_t io_conf = {
@@ -577,19 +584,39 @@ void aw32001_power_key_init(void)
         .pull_down_en = GPIO_PULLDOWN_ENABLE, // 启用下拉，确保空闲时为低电平
         .intr_type = GPIO_INTR_POSEDGE        // 上升沿触发中断
     };
-    gpio_config(&io_conf);
+    esp_err_t err = gpio_config(&io_conf);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Power key GPIO config failed: %s", esp_err_to_name(err));
+        return;
+    }
 
     // 安装GPIO中断服务（如果已安装则忽略错误）
-    esp_err_t err = gpio_install_isr_service(0);
+    err = gpio_install_isr_service(0);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE)
     {
         ESP_LOGE(TAG, "GPIO ISR service install failed: %s", esp_err_to_name(err));
         return;
     }
-    gpio_isr_handler_add(PWR_KEY_PIN, pwr_key_isr_handler, (void *)(uint32_t)PWR_KEY_PIN);
+    err = gpio_isr_handler_add(PWR_KEY_PIN, pwr_key_isr_handler, (void *)(uint32_t)PWR_KEY_PIN);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Power key ISR handler add failed: %s", esp_err_to_name(err));
+        return;
+    }
 
     // 创建监控任务
-    xTaskCreate(pwr_key_monitor_task, "pwr_key_monitor", 512, NULL, 5, NULL);
+    BaseType_t task_ok = xTaskCreate(pwr_key_monitor_task,
+                                     "pwr_key_monitor",
+                                     PWR_KEY_MONITOR_TASK_STACK_SIZE,
+                                     NULL,
+                                     PWR_KEY_MONITOR_TASK_PRIORITY,
+                                     NULL);
+    if (task_ok != pdPASS)
+    {
+        ESP_LOGE(TAG, "Power key monitor task create failed");
+        return;
+    }
 
     ESP_LOGI(TAG, "Power key interrupt initialized, pin=%d", PWR_KEY_PIN);
 }
