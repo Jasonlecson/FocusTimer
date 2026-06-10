@@ -4,11 +4,7 @@
  * Opts: --bpp 1 --size 20 --no-compress --font C:/Windows/Fonts/NotoSansSC-VF.ttf --symbols æðŋɑɒɔəɚεɜɝɡɪʃʊʌʒˈˌːθ --range 32-127 --format lvgl -o ui_font_ipa_20.c
  ******************************************************************************/
 
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
 #include "lvgl.h"
-#else
-#include "lvgl/lvgl.h"
-#endif
 
 #ifndef UI_FONT_IPA_20
 #define UI_FONT_IPA_20 1

@@ -21,14 +21,14 @@ extern "C" {
 /**
  * @brief 单词数据结构
  */
-typedef struct {{
+typedef struct {
     const char *word;           /**< 英文单词 */
     const char *phonetic_us;    /**< 美式音标 */
     const char *phonetic_uk;    /**< 英式音标 */
     const char *meaning;        /**< 中文释义 */
     const char *example;        /**< 例句 */
     const char *example_cn;     /**< 例句翻译 */
-}} word_entry_t;
+} word_entry_t;
 
 /**
  * @brief 六级词库数据
