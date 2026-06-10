@@ -47,14 +47,21 @@ static void main_screen_timer_cb(void *arg)
     main_screen_notify_update_task();
 }
 
+static uint32_t s_last_synced_day = 0;
+
 static void main_screen_handle_day_rollover(const pcf85263a_datetime_t *datetime)
 {
-    if (datetime->hour == 0 && datetime->minute == 0)
+    uint32_t today = (uint32_t)datetime->year * 365 + (uint32_t)datetime->month * 30 + (uint32_t)datetime->day;
+    if (today != s_last_synced_day)
     {
         esp_err_t err = nvs_storage_sync_current_day();
-        if (err != ESP_OK)
+        if (err == ESP_OK)
         {
-            ESP_LOGE(TAG, "sync current day failed: %s", esp_err_to_name(err));
+            s_last_synced_day = today;
+        }
+        else
+        {
+            ESP_LOGE(TAG, "sync current day failed: %s (will retry)", esp_err_to_name(err));
         }
     }
 }
@@ -263,6 +270,11 @@ void main_screen_start_update_task(void)
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to start main screen timer: %s", esp_err_to_name(err));
+        esp_timer_delete(s_main_screen_timer_handle);
+        s_main_screen_timer_handle = NULL;
+        vTaskDelete(s_main_screen_update_task_handle);
+        s_main_screen_update_task_handle = NULL;
+        return;
     }
 
     update_main_screen_date_labels(false);
