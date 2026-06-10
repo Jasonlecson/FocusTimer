@@ -1,5 +1,4 @@
 #include "setting_screen_calls.h"
-#include "main_screen_calls.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include "lvgl.h"
@@ -265,7 +264,7 @@ void handle_time_setting_date_btn_event(lv_event_t *e)
         setting_set_editing_state(field, s_setting_editing);
         if (!s_setting_editing)
         {
-            if (was_editing && field == SETTING_FIELD_MONTH)
+            if (was_editing && (field == SETTING_FIELD_MONTH || field == SETTING_FIELD_YEAR))
             {
                 setting_adjust_day_for_month_year();
             }
@@ -390,6 +389,5 @@ void handle_time_setting_screen_load_unload_event(lv_event_t *e)
         {
             ESP_LOGW(TAG, "Failed to write RTC datetime: %s", esp_err_to_name(err));
         }
-        update_main_screen_date_labels(false); // 设置完后立即在主屏幕上更新
     }
 }
