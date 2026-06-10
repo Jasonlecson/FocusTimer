@@ -29,7 +29,12 @@ esp_err_t stcc4_i2c_init(i2c_port_num_t i2c_port_num)
 
 esp_err_t stcc4_i2c_deinit(i2c_master_bus_handle_t bus_handle)
 {
-    ESP_ERROR_CHECK(i2c_master_bus_rm_device(stcc4_i2c_dev_handle));
+    esp_err_t ret = i2c_master_bus_rm_device(stcc4_i2c_dev_handle);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "STCC4 de-init failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 de-init successfully");
 #endif
@@ -81,8 +86,12 @@ esp_err_t stcc4_read_measurement(int16_t *co2Concentration, float *temperature,
     uint16_t rawTemperature = 0;
     uint16_t rawRelativeHumidity = 0;
     uint16_t sensorStatusRaw = 0;
-    ESP_ERROR_CHECK(stcc4_read_measurement_raw(&rawCo2Concentration, &rawTemperature,
-                                               &rawRelativeHumidity, &sensorStatusRaw));
+    esp_err_t ret = stcc4_read_measurement_raw(&rawCo2Concentration, &rawTemperature,
+                                               &rawRelativeHumidity, &sensorStatusRaw);
+    if (ret != ESP_OK)
+    {
+        return ret;
+    }
     if (co2Concentration != NULL)
     {
         *co2Concentration = rawCo2Concentration;
@@ -106,7 +115,12 @@ esp_err_t stcc4_read_measurement(int16_t *co2Concentration, float *temperature,
 esp_err_t stcc4_start_continuous_measurement()
 {
     uint8_t buf[2] = {0x21, 0x8b};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "start continuous measurement failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 start continuous measurement");
 #endif
@@ -116,7 +130,12 @@ esp_err_t stcc4_start_continuous_measurement()
 esp_err_t stcc4_stop_continuous_measurement()
 {
     uint8_t buf[2] = {0x3f, 0x86};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "stop continuous measurement failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 stop continuous measurement");
 #endif
@@ -129,10 +148,20 @@ esp_err_t stcc4_read_measurement_raw(int16_t *co2ConcentrationRaw, uint16_t *tem
 {
     uint8_t buf[2] = {0xEC, 0x05};
     uint8_t receive_buf[12] = {0};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "read measurement transmit failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     vTaskDelay(pdMS_TO_TICKS(1));
 
-    i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1);
+    ret = i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "read measurement receive failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     *co2ConcentrationRaw = (int16_t)((receive_buf[0] << 8) | receive_buf[1]);
     if (crcCheck(&receive_buf[0], 2) != receive_buf[2])
     {
@@ -168,7 +197,12 @@ esp_err_t stcc4_set_pressure_compensation(uint16_t pressure)
     buf[2] = (pressure >> 8) & 0xFF;
     buf[3] = pressure & 0xFF;
     buf[4] = crcCheck(&buf[2], 2);
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "set pressure compensation failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     vTaskDelay(pdMS_TO_TICKS(1));
     return ESP_OK;
 }
@@ -182,7 +216,12 @@ esp_err_t stcc4_set_rht_compensation(uint16_t rawTemperature, uint16_t rawHumidi
     buf[5] = (rawHumidity >> 8) & 0xFF;
     buf[6] = rawHumidity & 0xFF;
     buf[7] = crcCheck(&buf[5], 2);
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "set RHT compensation failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     vTaskDelay(pdMS_TO_TICKS(1));
     return ESP_OK;
 }
@@ -190,7 +229,12 @@ esp_err_t stcc4_set_rht_compensation(uint16_t rawTemperature, uint16_t rawHumidi
 esp_err_t stcc4_measure_single_shot()
 {
     uint8_t buf[2] = {0x21, 0x9D};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "single shot command failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     vTaskDelay(pdMS_TO_TICKS(500));
     return ESP_OK;
 }
@@ -198,7 +242,12 @@ esp_err_t stcc4_measure_single_shot()
 esp_err_t stcc4_enter_sleep_mode()
 {
     uint8_t buf[2] = {0x36, 0x50};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "enter sleep mode failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 enter sleep mode");
 #endif
@@ -215,8 +264,12 @@ esp_err_t stcc4_exit_sleep_mode()
         {.command = I2C_MASTER_CMD_STOP},
     };
 
-    i2c_master_execute_defined_operations(stcc4_i2c_dev_handle, i2c_ops, sizeof(i2c_ops) / sizeof(i2c_operation_job_t), -1);
-    // i2c_master_transmit(stcc4_i2c_dev_handle, buf, 2, -1);
+    esp_err_t ret = i2c_master_execute_defined_operations(stcc4_i2c_dev_handle, i2c_ops, sizeof(i2c_ops) / sizeof(i2c_operation_job_t), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "exit sleep mode failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 exit sleep mode");
 #endif
@@ -227,7 +280,12 @@ esp_err_t stcc4_exit_sleep_mode()
 esp_err_t stcc4_perform_conditioning()
 {
     uint8_t buf[2] = {0x29, 0xBC};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "perform conditioning failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 perform conditioning");
 #endif
@@ -239,9 +297,19 @@ esp_err_t stcc4_perform_factory_reset(uint16_t *factoryResetResult)
 {
     uint8_t buf[2] = {0x36, 0x32};
     uint8_t receive_buf[2] = {0};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "factory reset transmit failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     vTaskDelay(pdMS_TO_TICKS(90));
-    ESP_ERROR_CHECK(i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1));
+    ret = i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "factory reset receive failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     *factoryResetResult = (receive_buf[0] << 8) | receive_buf[1];
     return ESP_OK;
 }
@@ -250,12 +318,22 @@ esp_err_t stcc4_perform_self_test(uint16_t *testResult)
 {
     uint8_t buf[2] = {0x27, 0x8c};
     uint8_t receive_buf[3] = {0};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "self test transmit failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 performing self test");
 #endif
     vTaskDelay(pdMS_TO_TICKS(360));
-    ESP_ERROR_CHECK(i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1));
+    ret = i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "self test receive failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     if (crcCheck(receive_buf, 2) != receive_buf[2])
     {
         ESP_LOGE(LOG_TAG, "Self test CRC check failed");
@@ -268,7 +346,12 @@ esp_err_t stcc4_perform_self_test(uint16_t *testResult)
 esp_err_t stcc4_enable_testing_mode()
 {
     uint8_t buf[2] = {0x3F, 0xBC};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "enable testing mode failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 enable testing mode");
 #endif
@@ -278,7 +361,12 @@ esp_err_t stcc4_enable_testing_mode()
 esp_err_t stcc4_disable_testing_mode()
 {
     uint8_t buf[2] = {0x3F, 0x3D};
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "disable testing mode failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 disable testing mode");
 #endif
@@ -292,11 +380,21 @@ esp_err_t stcc4_perform_forced_recalibration(int16_t targetCO2Concentration, int
     buf[2] = (targetCO2Concentration >> 8) & 0xFF;
     buf[3] = targetCO2Concentration & 0xFF;
     buf[4] = crcCheck(&buf[2], 2);
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "forced recalibration transmit failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     vTaskDelay(pdMS_TO_TICKS(90));
 
-    ESP_ERROR_CHECK(i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1));
+    ret = i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "forced recalibration receive failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     if (crcCheck(receive_buf, 2) != receive_buf[2])
     {
         ESP_LOGE(LOG_TAG, "perform Forced Recalibration CRC check failed");
@@ -312,9 +410,19 @@ esp_err_t stcc4_get_product_id(uint32_t *productId, uint64_t *serialNumber)
     uint8_t receive_buf[18] = {0};
     uint32_t id = 0;
     uint64_t sn = 0;
-    ESP_ERROR_CHECK(i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1));
+    esp_err_t ret = i2c_master_transmit(stcc4_i2c_dev_handle, buf, sizeof(buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "get product id transmit failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
     vTaskDelay(pdMS_TO_TICKS(1));
-    ESP_ERROR_CHECK(i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1));
+    ret = i2c_master_receive(stcc4_i2c_dev_handle, receive_buf, sizeof(receive_buf), -1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "get product id receive failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     for (uint8_t i = 0; i < sizeof(receive_buf) / 3; i++)
     {
@@ -348,12 +456,35 @@ static void stcc4_measurement_task(void *args)
     while (1)
     {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        stcc4_exit_sleep_mode();
-        stcc4_measure_single_shot();
-        stcc4_read_measurement(&value.co2Concentration, &value.temperature, &value.relativeHumidity, NULL);
+
+        esp_err_t ret = stcc4_exit_sleep_mode();
+        if (ret != ESP_OK)
+        {
+            ESP_LOGW(LOG_TAG, "exit sleep failed, skip this measurement");
+            continue;
+        }
+
+        ret = stcc4_measure_single_shot();
+        if (ret != ESP_OK)
+        {
+            ESP_LOGW(LOG_TAG, "single shot failed, skip this measurement");
+            stcc4_enter_sleep_mode();
+            continue;
+        }
+
+        ret = stcc4_read_measurement(&value.co2Concentration, &value.temperature, &value.relativeHumidity, NULL);
         stcc4_enter_sleep_mode();
-        xQueueOverwrite(stcc4_value_queue, &value);
-        ESP_LOGI(LOG_TAG, "Measurement taken: CO2=%d ppm, Temperature=%.2f C, Humidity=%.2f %%", value.co2Concentration, value.temperature, value.relativeHumidity);
+
+        if (ret == ESP_OK)
+        {
+            xQueueOverwrite(stcc4_value_queue, &value);
+            ESP_LOGI(LOG_TAG, "Measurement taken: CO2=%d ppm, Temperature=%.2f C, Humidity=%.2f %%",
+                     value.co2Concentration, value.temperature, value.relativeHumidity);
+        }
+        else
+        {
+            ESP_LOGW(LOG_TAG, "read measurement failed (0x%x), skip this cycle", ret);
+        }
     }
 }
 
