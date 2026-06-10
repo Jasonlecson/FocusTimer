@@ -252,7 +252,7 @@ static void idle_timer_cb(void *arg)
     if (s_idle_seconds >= DEEPSLEEP_IDLE_TIMEOUT_SEC)
     {
         ESP_LOGI(TAG, "idle timeout %ds, entering deep sleep", DEEPSLEEP_IDLE_TIMEOUT_SEC);
-        power_management_enter_deepsleep(60 * 1000);
+        power_management_enter_deepsleep(300 * 1000);
     }
 }
 
