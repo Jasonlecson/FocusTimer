@@ -231,7 +231,7 @@ esp_err_t aw96103_init()
     
     i2c_master_bus_handle_t bus_handle;
     i2c_master_get_bus_handle(I2C_NUM_0, &bus_handle);
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &dev_cfg, &s_cfg.handle));
+    ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(bus_handle, &dev_cfg, &s_cfg.handle), TAG, "aw96103 add i2c device failed");
 
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << s_cfg.int_io),

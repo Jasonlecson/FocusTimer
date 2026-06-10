@@ -268,7 +268,7 @@ static void init_minimal_display_stack(void)
     lv_scr_load(objects.main);
     _lock_release(&lvgl_api_lock);
 
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_lcd_panel_disp_on_off(panel_handle, true));
 }
 
 /* ==================== 公开接口 ==================== */

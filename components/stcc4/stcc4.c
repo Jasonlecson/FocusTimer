@@ -1,5 +1,6 @@
 #include "stcc4.h"
 #include "esp_log.h"
+#include "esp_check.h"
 #include "sdkconfig.h"
 
 #define I2C_MASTER_FREQ_HZ 400000
@@ -20,7 +21,7 @@ esp_err_t stcc4_i2c_init(i2c_port_num_t i2c_port_num)
         .device_address = STCC4_I2C_ADDR_64,
         .scl_speed_hz = I2C_MASTER_FREQ_HZ,
     };
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &stcc4_i2c_dev_config, &stcc4_i2c_dev_handle));
+    ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(bus_handle, &stcc4_i2c_dev_config, &stcc4_i2c_dev_handle), LOG_TAG, "stcc4 add i2c device failed");
 #if CONFIG_STCC4_DEBUG_OUTPUT
     ESP_LOGI(LOG_TAG, "STCC4 init successfully");
 #endif

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "aw32001.h"
+#include "esp_check.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -30,7 +31,7 @@ esp_err_t aw32001_init(i2c_port_num_t port_num)
         .device_address = AW32001_I2C_ADDR,
         .scl_speed_hz = 400000};
 
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &dev_config, &dev_handle));
+    ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(bus_handle, &dev_config, &dev_handle), TAG, "aw32001 add i2c device failed");
     ESP_LOGI(TAG, "AW32001 init successfully");
     return ESP_OK;
 }
