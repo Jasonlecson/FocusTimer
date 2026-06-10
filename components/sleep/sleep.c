@@ -31,6 +31,7 @@
 #include "power_management.h"
 #include "st7305_2p9.h"
 #include "ble.h"
+#include "mp3_screen_calls.h"
 
 #define TAG "sleep"
 
@@ -226,6 +227,9 @@ static void shipping_mode_cb(void *user_data)
 static void pre_deepsleep_cb(void *user_data)
 {
     (void)user_data;
+
+    /* 暂停 MP3 后台播放，释放 SPI/I2S 资源 */
+    mp3_screen_deepsleep_pause();
 
     (void)ble_set_advertising_enabled(false);
 
