@@ -20,7 +20,8 @@ enum ScreensEnum {
     SCREEN_ID_MESSAGE = 7,
     SCREEN_ID_POWER_SETTING = 8,
     SCREEN_ID_DATA_SYNC = 9,
-    _SCREEN_ID_LAST = 9
+    SCREEN_ID_VOCABULARY = 10,
+    _SCREEN_ID_LAST = 10
 };
 
 typedef struct _objects_t {
@@ -48,6 +49,7 @@ typedef struct _objects_t {
     lv_obj_t *submain_scr_enter_mp3_btn;
     lv_obj_t *submain_scr_enter_power_setting_btn;
     lv_obj_t *submain_scr_enter_power_setting_btn_1;
+    lv_obj_t *submain_scr_enter_vocabulary_btn;
     lv_obj_t *submain_version_label;
     lv_obj_t *mp3_scr_back_to_main_btn;
     lv_obj_t *mp3_scr_musictitle_label;
@@ -90,6 +92,16 @@ typedef struct _objects_t {
     lv_obj_t *data_sync_back_to_main_btn;
     lv_obj_t *data_sync_scr_ble_checkbox;
     lv_obj_t *data_sync_scr_ble_status_label;
+    lv_obj_t *vocabulary;
+    lv_obj_t *vocabulary_back_to_main_btn;
+    lv_obj_t *vocabulary_scr_word_label;
+    lv_obj_t *vocabulary_scr_phonetic_label;
+    lv_obj_t *vocabulary_scr_meaning_label;
+    lv_obj_t *vocabulary_scr_example_label;
+    lv_obj_t *vocabulary_scr_progress_label;
+    lv_obj_t *vocabulary_scr_count_label;
+    lv_obj_t *vocabulary_scr_known_btn;
+    lv_obj_t *vocabulary_scr_unknown_btn;
 } objects_t;
 
 extern objects_t objects;
@@ -120,6 +132,9 @@ void tick_screen_power_setting();
 
 void create_screen_data_sync();
 void tick_screen_data_sync();
+
+void create_screen_vocabulary();
+void tick_screen_vocabulary();
 
 void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);

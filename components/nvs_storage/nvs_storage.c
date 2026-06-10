@@ -810,3 +810,69 @@ esp_err_t nvs_storage_set_daily_minutes(uint16_t focus_minutes, uint16_t rest_mi
     portEXIT_CRITICAL(&s_nvs_storage_lock);
     return ESP_OK;
 }
+
+/* ========== 词汇学习进度存储 ========== */
+
+#define VocabNvsNamespace "vocab"
+#define VocabNvsKey "progress"
+
+esp_err_t nvs_storage_load_vocab_progress(nvs_storage_vocab_progress_t *progress, uint32_t word_count)
+{
+    if (progress == NULL || word_count == 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(VocabNvsNamespace, NVS_READONLY, &handle);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    size_t required_size = word_count * sizeof(nvs_storage_vocab_progress_t);
+    err = nvs_get_blob(handle, VocabNvsKey, progress, &required_size);
+    nvs_close(handle);
+
+    if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        ESP_LOGI(TAG, "no vocab progress found, first use");
+    }
+    else if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "load vocab progress failed: %s", esp_err_to_name(err));
+    }
+
+    return err;
+}
+
+esp_err_t nvs_storage_save_vocab_progress(const nvs_storage_vocab_progress_t *progress, uint32_t word_count)
+{
+    if (progress == NULL || word_count == 0)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(VocabNvsNamespace, NVS_READWRITE, &handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "open vocab nvs failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    size_t blob_size = word_count * sizeof(nvs_storage_vocab_progress_t);
+    err = nvs_set_blob(handle, VocabNvsKey, progress, blob_size);
+    if (err == ESP_OK)
+    {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "save vocab progress failed: %s", esp_err_to_name(err));
+    }
+
+    return err;
+}

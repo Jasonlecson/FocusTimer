@@ -32,6 +32,11 @@ extern void action_data_sync_scr(lv_event_t * e);
 extern void action_submain_scr_enter_data_sync_scr(lv_event_t * e);
 extern void action_power_setting_scr_time_btn(lv_event_t * e);
 extern void action_submain_scr(lv_event_t * e);
+extern void action_submain_scr_enter_vocabulary_btn(lv_event_t * e);
+extern void action_vocabulary_scr(lv_event_t * e);
+extern void action_vocabulary_scr_known_btn(lv_event_t * e);
+extern void action_vocabulary_scr_unknown_btn(lv_event_t * e);
+extern void action_vocabulary_scr_meaning_label(lv_event_t * e);
 
 #ifdef __cplusplus
 }

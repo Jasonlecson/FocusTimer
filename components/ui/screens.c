@@ -7,6 +7,8 @@
 #include "vars.h"
 #include "styles.h"
 #include "ui.h"
+#include "ui_font_ipa_20.h"
+#include "vocabulary_screen_calls.h"
 
 #include <string.h>
 
@@ -289,6 +291,25 @@ void create_screen_sub_main() {
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     add_style_btn_label_style(obj);
                     lv_label_set_text(obj, "数据同步");
+                }
+            }
+        }
+        {
+            // submain_scr_enter_vocabulary_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.submain_scr_enter_vocabulary_btn = obj;
+            lv_obj_set_pos(obj, 250, 77);
+            lv_obj_set_size(obj, 90, 40);
+            lv_obj_add_event_cb(obj, action_submain_scr_enter_vocabulary_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 7, -4);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_label_set_text(obj, "单词");
                 }
             }
         }
@@ -1254,6 +1275,161 @@ void create_screen_data_sync() {
 void tick_screen_data_sync() {
 }
 
+void create_screen_vocabulary() {
+    lv_obj_t *obj = lv_obj_create(0);
+    objects.vocabulary = obj;
+    lv_obj_set_pos(obj, 0, 0);
+    lv_obj_set_size(obj, 384, 168);
+    lv_obj_add_event_cb(obj, action_vocabulary_scr, LV_EVENT_SCREEN_LOAD_START, (void *)0);
+    lv_obj_add_event_cb(obj, action_vocabulary_scr, LV_EVENT_SCREEN_UNLOAD_START, (void *)0);
+    add_style_screen_style_dark(obj);
+    {
+        lv_obj_t *parent_obj = obj;
+        {
+            // vocabulary_back_to_main_btn
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.vocabulary_back_to_main_btn = obj;
+            lv_obj_set_pos(obj, 4, 4);
+            lv_obj_set_size(obj, 30, 30);
+            lv_obj_add_event_cb(obj, action_back_to_main_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, -1, -2);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "<");
+                }
+            }
+        }
+        {
+            // vocabulary_scr_progress_label (进度: 1/20)
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.vocabulary_scr_progress_label = obj;
+            lv_obj_set_pos(obj, 150, 6);
+            lv_obj_set_size(obj, 80, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "0/0");
+        }
+        {
+            // vocabulary_scr_count_label (新词:1200)
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.vocabulary_scr_count_label = obj;
+            lv_obj_set_pos(obj, 280, 6);
+            lv_obj_set_size(obj, 100, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "新词:0");
+        }
+        {
+            // vocabulary_scr_word_label (单词)
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.vocabulary_scr_word_label = obj;
+            lv_obj_set_pos(obj, 192, 32);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_roboto_condensed_3_40, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_align(obj, LV_ALIGN_TOP_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_top(obj, 28, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "Loading...");
+        }
+        {
+            // vocabulary_scr_phonetic_label (音标)
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.vocabulary_scr_phonetic_label = obj;
+            lv_obj_set_pos(obj, 192, 78);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_ipa_20, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_align(obj, LV_ALIGN_TOP_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_top(obj, 72, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "");
+        }
+        {
+            // vocabulary_scr_meaning_label (释义 - 可触摸翻转)
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.vocabulary_scr_meaning_label = obj;
+            lv_obj_set_pos(obj, 192, 100);
+            lv_obj_set_size(obj, 260, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_align(obj, LV_ALIGN_TOP_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_top(obj, 96, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(obj, action_vocabulary_scr_meaning_label, LV_EVENT_SHORT_CLICKED, (void *)0);
+            lv_label_set_text(obj, "touch to show");
+        }
+        {
+            // vocabulary_scr_example_label (例句)
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.vocabulary_scr_example_label = obj;
+            lv_obj_set_pos(obj, 192, 120);
+            lv_obj_set_size(obj, 340, LV_SIZE_CONTENT);
+            add_style_label_style(obj);
+            lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_align(obj, LV_ALIGN_TOP_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_pad_top(obj, 116, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "");
+        }
+        {
+            // vocabulary_scr_unknown_btn (不认识)
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.vocabulary_scr_unknown_btn = obj;
+            lv_obj_set_pos(obj, 20, 130);
+            lv_obj_set_size(obj, 80, 32);
+            lv_obj_add_event_cb(obj, action_vocabulary_scr_unknown_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 0, -2);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "不认识");
+                }
+            }
+        }
+        {
+            // vocabulary_scr_known_btn (认识)
+            lv_obj_t *obj = lv_button_create(parent_obj);
+            objects.vocabulary_scr_known_btn = obj;
+            lv_obj_set_pos(obj, 284, 130);
+            lv_obj_set_size(obj, 80, 32);
+            lv_obj_add_event_cb(obj, action_vocabulary_scr_known_btn, LV_EVENT_SHORT_CLICKED, (void *)0);
+            add_style_btn_style(obj);
+            {
+                lv_obj_t *parent_obj = obj;
+                {
+                    lv_obj_t *obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(obj, 0, -2);
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    add_style_btn_label_style(obj);
+                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_text_font(obj, &ui_font_siyuanheiti_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "认识");
+                }
+            }
+        }
+    }
+
+    tick_screen_vocabulary();
+}
+
+void tick_screen_vocabulary() {
+}
+
 typedef void (*tick_screen_func_t)();
 tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_start,
@@ -1265,6 +1441,7 @@ tick_screen_func_t tick_screen_funcs[] = {
     tick_screen_message,
     tick_screen_power_setting,
     tick_screen_data_sync,
+    tick_screen_vocabulary,
 };
 void tick_screen(int screen_index) {
     tick_screen_funcs[screen_index]();
@@ -1379,4 +1556,5 @@ void create_screens() {
     create_screen_message();
     create_screen_power_setting();
     create_screen_data_sync();
+    create_screen_vocabulary();
 }

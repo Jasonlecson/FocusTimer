@@ -16664,6 +16664,13 @@ static const word_entry_t cet6_words[] = {
 /** @brief 六级词库单词数量 */
 #define CET6_WORD_COUNT 2078
 
+/**
+ * @brief 根据索引获取单词
+ * @param index 单词索引 (0 ~ CET6_WORD_COUNT-1)
+ * @return 单词数据指针，索引无效返回 NULL
+ */
+const word_entry_t *cet6_get_word_by_index(uint32_t index);
+
 #ifdef __cplusplus
 }
 #endif

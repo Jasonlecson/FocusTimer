@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "lvgl.h"
+#include "lvgl_indev.h"
 #include "lvgl_user.h"
 #include "power_management.h"
 
@@ -26,6 +27,12 @@ static bool s_touch_key_repeat_active[TOUCH_KEY_COUNT] = {false};
 static bool s_center_key_pulse_pressed = false;
 static uint8_t s_center_key_pending_clicks = 0;
 static int64_t s_touch_key_next_repeat_us[TOUCH_KEY_COUNT] = {0};
+
+/* 长按检测 */
+static int64_t s_center_key_press_time_ms = 0;
+static bool s_center_key_long_press_pending = false;
+static lvgl_indev_long_press_cb_t s_long_press_cb = NULL;
+#define CENTER_KEY_LONG_PRESS_MS 1000U
 #define MAX_PAGES 10
 #define MAX_ITEMS_PER_PAGE 30
 
@@ -246,6 +253,8 @@ static void screen_tracker_timer_cb(lv_timer_t *timer)
 static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
 {
     (void)indev;
+    bool fire_long_press = false;
+
     taskENTER_CRITICAL(&s_enc_lock);
 
     int64_t now_us = esp_timer_get_time();
@@ -283,7 +292,18 @@ static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
         encoder_state = LV_INDEV_STATE_RELEASED;
     }
 
+    if (s_center_key_long_press_pending)
+    {
+        s_center_key_long_press_pending = false;
+        fire_long_press = true;
+    }
+
     taskEXIT_CRITICAL(&s_enc_lock);
+
+    if (fire_long_press && s_long_press_cb)
+    {
+        s_long_press_cb();
+    }
 }
 
 void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
@@ -301,9 +321,26 @@ void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
         {
             s_touch_key_repeat_active[key_index] = false;
             s_touch_key_next_repeat_us[key_index] = 0;
-            if (key_index == TOUCH_KEY_SELECT_INDEX && s_center_key_pending_clicks > 1)
+
+            if (key_index == TOUCH_KEY_SELECT_INDEX)
             {
-                s_center_key_pending_clicks = 1;
+                /* 中键释放：根据持续时间判断短按/长按 */
+                int64_t now = esp_timer_get_time() / 1000;
+                int64_t duration = now - s_center_key_press_time_ms;
+                if (duration >= CENTER_KEY_LONG_PRESS_MS)
+                {
+                    /* 长按：清除已入队的 click，设置长按标志 */
+                    s_center_key_pending_clicks = 0;
+                    s_center_key_long_press_pending = true;
+                }
+                else
+                {
+                    /* 短按：清除多余的 pending click，保留 1 个 */
+                    if (s_center_key_pending_clicks > 1)
+                    {
+                        s_center_key_pending_clicks = 1;
+                    }
+                }
             }
         }
         taskEXIT_CRITICAL(&s_enc_lock);
@@ -312,14 +349,25 @@ void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
 
     if (key_index < TOUCH_KEY_COUNT && !s_touch_key_repeat_active[key_index])
     {
-        trigger_touch_key_locked(key_index);
-        if (key_index != TOUCH_KEY_SELECT_INDEX)
+        if (key_index == TOUCH_KEY_SELECT_INDEX)
         {
+            /* 中键按下：记录时间戳，立即入队 click（短按时释放不取消） */
+            s_center_key_press_time_ms = esp_timer_get_time() / 1000;
+            queue_center_key_click_locked();
+        }
+        else
+        {
+            trigger_touch_key_locked(key_index);
             s_touch_key_repeat_active[key_index] = true;
             s_touch_key_next_repeat_us[key_index] = esp_timer_get_time() + ((int64_t)TOUCH_KEY_INITIAL_REPEAT_DELAY_MS * 1000);
         }
     }
     taskEXIT_CRITICAL(&s_enc_lock);
+}
+
+void lvgl_indev_register_long_press_cb(lvgl_indev_long_press_cb_t cb)
+{
+    s_long_press_cb = cb;
 }
 
 void lvgl_indev_init()

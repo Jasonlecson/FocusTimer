@@ -18,6 +18,7 @@
 #include "setting_screen_calls.h"
 #include "power_setting_screen_calls.h"
 #include "data_sync_screen_calls.h"
+#include "vocabulary_screen_calls.h"
 
 extern esp_lcd_panel_handle_t panel_handle;
 
@@ -311,5 +312,66 @@ void action_submain_scr(lv_event_t * e)
     if (code == LV_EVENT_SCREEN_LOAD_START)
     {
         lv_label_set_text(objects.submain_version_label, "v" FOCUS_TIMER_VERSION);
+    }
+}
+
+void action_submain_scr_enter_vocabulary_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        lv_screen_load_anim(objects.vocabulary, LV_SCREEN_LOAD_ANIM_OVER_LEFT, 200, 0, false);
+    }
+}
+
+void action_vocabulary_scr(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SCREEN_LOAD_START)
+    {
+        vocabulary_screen_start_session();
+    }
+    if (code == LV_EVENT_SCREEN_UNLOAD_START)
+    {
+        vocabulary_screen_stop_session();
+    }
+}
+
+void action_vocabulary_scr_known_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        vocabulary_answer_known();
+    }
+}
+
+void action_vocabulary_scr_unknown_btn(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        if (ui_action_blocked_by_message_modal())
+        {
+            return;
+        }
+        vocabulary_answer_unknown();
+    }
+}
+
+void action_vocabulary_scr_meaning_label(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SHORT_CLICKED)
+    {
+        vocabulary_toggle_meaning();
     }
 }
