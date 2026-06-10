@@ -459,6 +459,7 @@ static void update_pomodoro_labels_locked(void)
 static void pomodoro_countdown_timer_cb(void *arg)
 {
     (void)arg;
+    bool need_audio = false;
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     if (!s_is_paused && !s_waiting_transition_confirm)
@@ -470,7 +471,7 @@ static void pomodoro_countdown_timer_cb(void *arg)
 
         if (s_remaining_seconds == 0)
         {
-            pomodoro_play_timeout_audio_todo();
+            need_audio = true;
             s_waiting_transition_confirm = true;
             s_is_paused = true;
             s_timeout_message_pending = true;
@@ -478,6 +479,12 @@ static void pomodoro_countdown_timer_cb(void *arg)
         }
     }
     portEXIT_CRITICAL(&s_pomodoro_lock);
+
+    if (need_audio)
+    {
+        pomodoro_play_timeout_audio_todo();
+    }
+
     pomodoro_notify_ui_task();
 }
 
@@ -486,8 +493,6 @@ static void pomodoro_flip_check_timer_cb(void *arg)
     (void)arg;
     static lv_disp_rotation_t s_last_imu_rotation = LV_DISP_ROTATION_0;
     static bool s_flip_rotation_initialized = false;
-
-    pomodoro_sync_current_day_and_counts();
 
     lv_disp_rotation_t imu_rotation = lvgl_user_get_rotation();
     if (!s_flip_rotation_initialized)
@@ -568,7 +573,7 @@ void pomodoro_screen_start_update_task(void)
 
     BaseType_t task_created = xTaskCreate(pomodoro_screen_update_task,
                                           "pomodoro_screen_update",
-                                          2048,
+                                          3072,
                                           NULL,
                                           5,
                                           &s_pomodoro_screen_update_task_handle);
@@ -615,7 +620,6 @@ void pomodoro_screen_start_update_task(void)
 
     portENTER_CRITICAL(&s_pomodoro_lock);
     s_countdown_timer_running = false;
-    s_pomodoro_countdown_timer_handle = s_pomodoro_countdown_timer_handle;
     pomodoro_update_countdown_timer_locked();
     portEXIT_CRITICAL(&s_pomodoro_lock);
 
