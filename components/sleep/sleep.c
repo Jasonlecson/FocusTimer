@@ -19,6 +19,7 @@
 #include "lvgl_user.h"
 #include "sys_init.h"
 #include "aw96103.h"
+#include "stcc4.h"
 #include "pcf85263a.h"
 #include "imu.h"
 #include "aw32001.h"
@@ -317,6 +318,7 @@ void sleep_handle_timer_wakeup(void)
     ESP_ERROR_CHECK_WITHOUT_ABORT(i2c_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(pcf85263a_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(nvs_storage_init());
+    ESP_ERROR_CHECK_WITHOUT_ABORT(stcc4_i2c_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(aw32001_init(I2C_NUM_0));
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_init());
     ESP_ERROR_CHECK_WITHOUT_ABORT(battery_refresh_once());
@@ -330,9 +332,8 @@ void sleep_handle_timer_wakeup(void)
     init_minimal_display_stack();
 
     esp_lcd_panel_st7305_set_power_mode(panel_handle, ST7305_PWR_MODE_HPM);
+    (void)main_screen_refresh_once(1200);
 
-    /* 只更新时钟和电池，跳过 STCC4 传感器读取（省 ~500ms 唤醒时间） */
-    update_main_screen_date_labels(true);
     _lock_acquire(&lvgl_api_lock);
     if (lvgl_display != NULL)
     {
