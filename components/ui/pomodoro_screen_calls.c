@@ -13,6 +13,7 @@
 #include "screens.h"
 #include "message_screen_calls.h"
 #include "nvs_storage.h"
+#include "pcf85263a.h"
 #include "pomodoro_screen_calls.h"
 #include "imu.h"
 
@@ -434,6 +435,22 @@ static void update_pomodoro_labels_locked(void)
             {
                 lv_label_set_text(btn_label, ""); // 暂停图标
                 lv_obj_set_pos(btn_label, -7, -5);
+            }
+        }
+    }
+
+    // 更新当前实时时钟
+    if (objects.pomodoro_scr_nowtime_label != NULL)
+    {
+        pcf85263a_handle_t rtc = pcf85263a_get_handle();
+        if (rtc != NULL)
+        {
+            pcf85263a_datetime_t dt = {0};
+            if (pcf85263a_get_datetime(rtc, &dt) == ESP_OK)
+            {
+                char now_text[8];
+                (void)snprintf(now_text, sizeof(now_text), "%02u:%02u", dt.hour, dt.minute);
+                lv_label_set_text(objects.pomodoro_scr_nowtime_label, now_text);
             }
         }
     }

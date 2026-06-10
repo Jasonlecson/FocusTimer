@@ -99,10 +99,6 @@ void update_main_screen_date_labels(bool acquire_lock)
     {
         lv_label_set_text(objects.main_scr_dayofweek_value_label, dayofweek_text);
     }
-    if (objects.pomodoro_scr_nowtime_label != NULL)
-    {
-        lv_label_set_text(objects.pomodoro_scr_nowtime_label, time_text);
-    }
     if (acquire_lock)
     {
         _lock_release(&lvgl_api_lock);
