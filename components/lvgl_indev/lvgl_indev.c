@@ -33,6 +33,13 @@ static int64_t s_center_key_press_time_ms = 0;
 static bool s_center_key_long_press_pending = false;
 static lvgl_indev_long_press_cb_t s_long_press_cb = NULL;
 #define CENTER_KEY_LONG_PRESS_MS 1000U
+
+/* 左右键直接动作屏幕（用于单词学习等场景） */
+static lv_obj_t *s_lr_action_screen = NULL;
+static lvgl_indev_lr_action_cb_t s_lr_left_cb = NULL;
+static lvgl_indev_lr_action_cb_t s_lr_right_cb = NULL;
+static lv_indev_read_cb_t s_original_encoder_read_cb = NULL;
+static lv_indev_t *s_encoder_indev = NULL;
 #define MAX_PAGES 10
 #define MAX_ITEMS_PER_PAGE 30
 
@@ -306,6 +313,37 @@ static void encoder_read(lv_indev_t *indev, lv_indev_data_t *data)
     }
 }
 
+/**
+ * @brief 包装 read_cb：当活动屏幕为已注册的左右键动作屏幕时，
+ *        将左右键重定向为直接回调，不触发 LVGL 焦点导航。
+ */
+static void encoder_read_wrapper(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    s_original_encoder_read_cb(indev, data);
+
+    if (s_lr_action_screen != NULL && lv_screen_active() == s_lr_action_screen)
+    {
+        if (data->enc_diff < 0 && s_lr_left_cb)
+        {
+            s_lr_left_cb();
+        }
+        else if (data->enc_diff > 0 && s_lr_right_cb)
+        {
+            s_lr_right_cb();
+        }
+        data->enc_diff = 0;
+    }
+}
+
+void lvgl_indev_set_lr_action_screen(lv_obj_t *screen,
+                                     lvgl_indev_lr_action_cb_t left_cb,
+                                     lvgl_indev_lr_action_cb_t right_cb)
+{
+    s_lr_action_screen = screen;
+    s_lr_left_cb = left_cb;
+    s_lr_right_cb = right_cb;
+}
+
 void aw_touch_key_event_cb(uint8_t key_index, bool pressed, void *user_ctx)
 {
     (void)user_ctx;
@@ -384,6 +422,8 @@ void lvgl_indev_init()
     lv_indev_t *indev = lv_indev_create();
     lv_indev_set_type(indev, LV_INDEV_TYPE_ENCODER);
     lv_indev_set_display(indev, lv_obj_get_display(lv_screen_active()));
-    lv_indev_set_read_cb(indev, encoder_read);
+    s_original_encoder_read_cb = encoder_read;
+    s_encoder_indev = indev;
+    lv_indev_set_read_cb(indev, encoder_read_wrapper);
     lv_indev_set_group(indev, g_encoder_group); // 将编码器输入设备与组关联
 }

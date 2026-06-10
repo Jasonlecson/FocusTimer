@@ -399,6 +399,11 @@ void vocabulary_screen_start_session(void)
     /* 注册长按中键返回回调 */
     lvgl_indev_register_long_press_cb(vocabulary_long_press_cb);
 
+    /* 注册左右键直接动作：左键=不认识，右键=认识 */
+    lvgl_indev_set_lr_action_screen(objects.vocabulary,
+                                    vocabulary_answer_unknown,
+                                    vocabulary_answer_known);
+
     /* 更新天计数器 */
     s_day_counter = vocab_get_current_day();
 
@@ -422,6 +427,9 @@ void vocabulary_screen_stop_session(void)
 {
     /* 注销长按中键返回回调 */
     lvgl_indev_register_long_press_cb(NULL);
+
+    /* 注销左右键直接动作 */
+    lvgl_indev_set_lr_action_screen(NULL, NULL, NULL);
 
     if (s_progress_loaded)
     {
