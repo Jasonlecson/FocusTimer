@@ -395,6 +395,7 @@ static void s_set_amp_enabled(bool enable)
 static esp_err_t s_load_playlist(void)
 {
 	esp_err_t ret = sdspi_collect_wav_files(&sd_handle, &s_state.files);
+	portENTER_CRITICAL(&s_mp3_lock);
 	if (ret != ESP_OK) {
 		s_state.playlist_loaded = false;
 		s_state.files.count = 0;
@@ -403,14 +404,14 @@ static esp_err_t s_load_playlist(void)
 		s_state.paused = true;
 		s_state.track_duration_ms = 0;
 		s_state.track_position_ms = 0;
-		return ret;
+	} else {
+		s_state.playlist_loaded = true;
+		if (s_state.current_index >= (int)s_state.files.count) {
+			s_state.current_index = 0;
+		}
 	}
-
-	s_state.playlist_loaded = true;
-	if (s_state.current_index >= (int)s_state.files.count) {
-		s_state.current_index = 0;
-	}
-	return ESP_OK;
+	portEXIT_CRITICAL(&s_mp3_lock);
+	return ret;
 }
 
 static void s_cleanup_track(FILE **pf, i2s_chan_handle_t *tx_chan)
@@ -506,16 +507,15 @@ static esp_err_t s_open_current_track(FILE **pf, i2s_chan_handle_t *tx_chan, wav
 
 static void s_set_next_index(bool forward)
 {
+	portENTER_CRITICAL(&s_mp3_lock);
 	if (!s_state.playlist_loaded || s_state.files.count == 0) {
 		s_state.current_index = 0;
-		return;
-	}
-
-	if (forward) {
+	} else if (forward) {
 		s_state.current_index = (s_state.current_index + 1) % (int)s_state.files.count;
 	} else {
 		s_state.current_index = (s_state.current_index - 1 + (int)s_state.files.count) % (int)s_state.files.count;
 	}
+	portEXIT_CRITICAL(&s_mp3_lock);
 }
 
 static void mp3_screen_update_task(void *arg)
@@ -530,7 +530,6 @@ static void mp3_screen_update_task(void *arg)
 
 	if (buffer == NULL) {
 		ESP_LOGE(TAG, "No memory for MP3 buffer");
-		free(buffer);
 		vTaskDelete(NULL);
 		return;
 	}
@@ -753,7 +752,9 @@ static void mp3_screen_update_task(void *arg)
 	s_cleanup_track(&f, &tx_chan);
 	free(buffer);
 	s_set_amp_enabled(false);
+	portENTER_CRITICAL(&s_mp3_lock);
 	s_state.playing = false;
+	portEXIT_CRITICAL(&s_mp3_lock);
 	s_mark_ui_dirty();
 	portENTER_CRITICAL(&s_mp3_lock);
 	s_mp3_task_handle = NULL;
