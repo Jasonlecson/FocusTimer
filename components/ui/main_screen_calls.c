@@ -47,21 +47,14 @@ static void main_screen_timer_cb(void *arg)
     main_screen_notify_update_task();
 }
 
-static uint32_t s_last_synced_day = 0;
-
 static void main_screen_handle_day_rollover(const pcf85263a_datetime_t *datetime)
 {
-    uint32_t today = (uint32_t)datetime->year * 365 + (uint32_t)datetime->month * 30 + (uint32_t)datetime->day;
-    if (today != s_last_synced_day)
+    if (datetime->hour == 0 && datetime->minute == 0)
     {
         esp_err_t err = nvs_storage_sync_current_day();
-        if (err == ESP_OK)
+        if (err != ESP_OK)
         {
-            s_last_synced_day = today;
-        }
-        else
-        {
-            ESP_LOGE(TAG, "sync current day failed: %s (will retry)", esp_err_to_name(err));
+            ESP_LOGE(TAG, "sync current day failed: %s", esp_err_to_name(err));
         }
     }
 }

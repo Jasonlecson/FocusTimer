@@ -74,6 +74,19 @@ void power_management_start_deepsleep_idle_detect(void);
  */
 void power_management_stop_deepsleep_idle_detect(void);
 
+/**
+ * @brief 阻止自动深度睡眠（引用计数方式，可嵌套调用）
+ *
+ * 用于 MP3 播放等场景：播放开始时调用，播放结束时调用 allow。
+ * 手动调用 power_management_enter_deepsleep() 不受此限制。
+ */
+void power_management_prevent_auto_deepsleep(void);
+
+/**
+ * @brief 取消阻止自动深度睡眠（与 prevent 配对使用）
+ */
+void power_management_allow_auto_deepsleep(void);
+
 /* ---- Deep sleep hooks ---- */
 
 typedef void (*power_management_hook_cb_t)(void *user_data);

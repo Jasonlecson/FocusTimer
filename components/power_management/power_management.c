@@ -50,6 +50,7 @@ static int32_t s_idle_seconds = 0;
 static int32_t s_screen_idle_seconds = 0;
 static bool s_screen_in_lpm = false;
 static bool s_deepsleep_idle_detect_enabled = false;
+static int s_deepsleep_prevent_count = 0; /* >0 时阻止自动深度睡眠 */
 
 static void set_screen_power_mode(st7305_power_mode_t power_mode)
 {
@@ -248,6 +249,13 @@ static void idle_timer_cb(void *arg)
     if (!s_auto_sleep || !s_deepsleep_idle_detect_enabled)
         return;
 
+    /* 有组件阻止自动深度睡眠（如 MP3 播放中） */
+    if (s_deepsleep_prevent_count > 0)
+    {
+        s_idle_seconds = 0;
+        return;
+    }
+
     s_idle_seconds++;
     if (s_idle_seconds >= DEEPSLEEP_IDLE_TIMEOUT_SEC)
     {
@@ -309,6 +317,21 @@ void power_management_stop_deepsleep_idle_detect(void)
 {
     s_deepsleep_idle_detect_enabled = false;
     s_idle_seconds = 0;
+}
+
+void power_management_prevent_auto_deepsleep(void)
+{
+    s_deepsleep_prevent_count++;
+    ESP_LOGD(TAG, "prevent auto deepsleep, count=%d", s_deepsleep_prevent_count);
+}
+
+void power_management_allow_auto_deepsleep(void)
+{
+    if (s_deepsleep_prevent_count > 0)
+    {
+        s_deepsleep_prevent_count--;
+    }
+    ESP_LOGD(TAG, "allow auto deepsleep, count=%d", s_deepsleep_prevent_count);
 }
 
 /* ==================== Deep Sleep / Wakeup ==================== */

@@ -31,7 +31,6 @@
 #include "power_management.h"
 #include "st7305_2p9.h"
 #include "ble.h"
-#include "mp3_screen_calls.h"
 
 #define TAG "sleep"
 
@@ -228,9 +227,6 @@ static void pre_deepsleep_cb(void *user_data)
 {
     (void)user_data;
 
-    /* 暂停 MP3 后台播放，释放 SPI/I2S 资源 */
-    mp3_screen_deepsleep_pause();
-
     (void)ble_set_advertising_enabled(false);
 
     esp_err_t err = aw96103_enter_doze_mode();
@@ -270,9 +266,13 @@ static void init_minimal_display_stack(void)
     _lock_acquire(&lvgl_api_lock);
     create_screens();
     lv_scr_load(objects.main);
+    if (lvgl_display != NULL)
+    {
+        lv_refr_now(lvgl_display);
+    }
     _lock_release(&lvgl_api_lock);
 
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_lcd_panel_disp_on_off(panel_handle, true));
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 }
 
 /* ==================== 公开接口 ==================== */
