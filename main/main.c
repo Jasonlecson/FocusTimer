@@ -31,8 +31,8 @@
 
 void app_main(void)
 {
-    esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
-    ESP_LOGI(TAG, "boot, wakeup cause=%d", (int)wake_cause);
+    uint32_t wake_causes = esp_sleep_get_wakeup_causes();
+    ESP_LOGI(TAG, "boot, wakeup causes=0x%08lx", wake_causes);
 
     ESP_ERROR_CHECK_WITHOUT_ABORT(sleep_init_nvs_flash());
     bool wakeup_from_timer = power_management_is_wakeup_from_timer();

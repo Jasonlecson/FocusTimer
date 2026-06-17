@@ -338,18 +338,18 @@ void power_management_allow_auto_deepsleep(void)
 
 bool power_management_is_wakeup_from_sleep(void)
 {
-    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    return (cause == ESP_SLEEP_WAKEUP_TIMER) || (cause == ESP_SLEEP_WAKEUP_EXT1);
+    uint32_t causes = esp_sleep_get_wakeup_causes();
+    return (causes & (1UL << ESP_SLEEP_WAKEUP_TIMER)) || (causes & (1UL << ESP_SLEEP_WAKEUP_EXT1));
 }
 
 bool power_management_is_wakeup_from_timer(void)
 {
-    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
+    return esp_sleep_get_wakeup_causes() & (1UL << ESP_SLEEP_WAKEUP_TIMER);
 }
 
 bool power_management_is_wakeup_by_touch(void)
 {
-    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+    return esp_sleep_get_wakeup_causes() & (1UL << ESP_SLEEP_WAKEUP_EXT1);
 }
 
 esp_err_t power_management_register_pre_deepsleep_cb(power_management_hook_cb_t cb, void *user_data)

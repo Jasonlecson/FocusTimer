@@ -78,7 +78,7 @@ static bool pomodoro_sync_counts_from_storage(void)
 {
     // deep sleep 唤醒时，RTC_FAST_ATTR 变量已保留最新值，
     // 需要将 RTC 值同步回 NVS 模块 RAM 状态，而非用 NVS 旧值覆盖 RTC 值
-    if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED)
+    if (esp_sleep_get_wakeup_causes() != 0)
     {
         // 检查是否跨日：NVS 当前追踪的日期 vs RTC 保存的日期
         char nvs_date[11] = {0};
